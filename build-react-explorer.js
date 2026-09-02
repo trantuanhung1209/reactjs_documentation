@@ -1,0 +1,588 @@
+const fs = require('fs');
+
+const sourcePath = 'React-base-nang-cao.md';
+const outputPath = 'react-explorer.html';
+const markdown = fs.readFileSync(sourcePath, 'utf8');
+const encodedSource = Buffer.from(markdown, 'utf8').toString('base64');
+
+const html = String.raw`<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>React Explorer — Từ Bản Chất Đến Thực Hành</title>
+  <style>
+    :root {
+      --bg: #0a0c10; --surface: #10141b; --surface-2: #161b24; --surface-3: #1d2430;
+      --text: #e8edf4; --muted: #9099a8; --faint: #5d6674; --line: #272e3a;
+      --accent: #62dafb; --accent-2: #8b7cf6; --good: #56d7a0; --warn: #f3bd68;
+      --code: #090b0f; --sidebar: 292px; --shadow: 0 18px 60px rgba(0,0,0,.28);
+    }
+    :root[data-theme="light"] {
+      --bg: #f6f7f9; --surface: #fff; --surface-2: #f0f3f6; --surface-3: #e8edf2;
+      --text: #18202b; --muted: #647083; --faint: #8791a0; --line: #dce2e9;
+      --accent: #087ea4; --accent-2: #6555d9; --good: #087d57; --warn: #a36308;
+      --code: #161b22; --shadow: 0 18px 55px rgba(31,42,55,.1);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; min-height: 100vh; color: var(--text); background: var(--bg); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    a { color: var(--accent); }
+    .progress-rail { position: fixed; inset: 0 0 auto; height: 3px; z-index: 80; background: var(--surface-3); }
+    .progress-bar { height: 100%; width: 0; background: linear-gradient(90deg,var(--accent),var(--accent-2)); transition: width .12s linear; }
+    .topbar { position: fixed; z-index: 60; top: 3px; left: var(--sidebar); right: 0; height: 64px; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid color-mix(in srgb,var(--line) 75%,transparent); background: color-mix(in srgb,var(--bg) 88%,transparent); backdrop-filter: blur(16px); }
+    .topbar-title { min-width: 0; }
+    .eyebrow { color: var(--accent); font: 700 10px/1.2 ui-monospace,SFMono-Regular,monospace; letter-spacing: .15em; text-transform: uppercase; }
+    .current-title { margin-top: 4px; max-width: 56vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--muted); }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .chapter-count { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: grid; place-items: center; }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .menu-btn { display: none; }
+    .sidebar { position: fixed; z-index: 70; inset: 3px auto 0 0; width: var(--sidebar); padding: 24px 16px 18px; border-right: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; }
+    .brand { padding: 2px 10px 22px; display: flex; align-items: center; gap: 11px; }
+    .brand-mark { width: 38px; height: 38px; border: 1px solid color-mix(in srgb,var(--accent) 65%,var(--line)); border-radius: 12px; display: grid; place-items: center; color: var(--accent); font-weight: 800; background: color-mix(in srgb,var(--accent) 8%,transparent); }
+    .brand strong { display: block; font-size: 15px; letter-spacing: -.01em; }
+    .brand span { display: block; margin-top: 2px; font-size: 10px; color: var(--muted); letter-spacing: .09em; text-transform: uppercase; }
+    .side-label { padding: 0 10px 9px; color: var(--faint); font: 700 10px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .chapter-list { margin: 0; padding: 0; list-style: none; overflow: auto; flex: 1; scrollbar-width: thin; }
+    .chapter-link { width: 100%; display: grid; grid-template-columns: 25px 1fr 18px; gap: 8px; align-items: start; padding: 10px; border: 0; border-radius: 10px; color: var(--muted); background: transparent; text-align: left; cursor: pointer; }
+    .chapter-link:hover { color: var(--text); background: var(--surface-2); }
+    .chapter-link.active { color: var(--text); background: color-mix(in srgb,var(--accent) 11%,var(--surface)); box-shadow: inset 2px 0 var(--accent); }
+    .chapter-no { color: var(--faint); font: 600 10px/1.5 ui-monospace,SFMono-Regular,monospace; }
+    .chapter-link.active .chapter-no { color: var(--accent); }
+    .chapter-name { font-size: 12px; line-height: 1.45; font-weight: 590; }
+    .check { color: var(--good); font-size: 13px; opacity: 0; }
+    .chapter-link.done .check { opacity: 1; }
+    .source-meta { margin: 14px 7px 0; padding: 12px; border-top: 1px solid var(--line); color: var(--faint); font: 10px/1.6 ui-monospace,SFMono-Regular,monospace; }
+    .main { margin-left: var(--sidebar); padding: 112px 26px 70px; }
+    .reader { width: min(100%, 790px); margin: 0 auto; }
+    .chapter-kicker { display: flex; align-items: center; gap: 10px; color: var(--accent); font: 700 11px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .14em; text-transform: uppercase; }
+    .chapter-kicker::after { content: ""; width: 42px; height: 1px; background: var(--accent); opacity: .5; }
+    .content { animation: reveal .35s ease both; }
+    @keyframes reveal { from { opacity: 0; transform: translateY(7px); } }
+    .content h1 { margin: 18px 0 18px; font-size: clamp(35px,6vw,58px); line-height: 1.04; letter-spacing: -.045em; }
+    .content h2 { margin: 18px 0 36px; font-size: clamp(31px,5vw,48px); line-height: 1.08; letter-spacing: -.038em; }
+    .content h3 { margin: 56px 0 20px; padding-top: 8px; font-size: clamp(22px,3vw,28px); line-height: 1.25; letter-spacing: -.025em; scroll-margin-top: 90px; }
+    .content h4 { margin: 36px 0 14px; font-size: 18px; }
+    .content p, .content li { font-size: 16px; line-height: 1.83; color: color-mix(in srgb,var(--text) 91%,var(--muted)); }
+    .content p { margin: 18px 0; }
+    .content strong { color: var(--text); font-weight: 720; }
+    .content em { color: color-mix(in srgb,var(--text) 88%,var(--accent)); }
+    .content ul, .content ol { margin: 17px 0; padding-left: 25px; }
+    .content li { padding-left: 5px; margin: 7px 0; }
+    .content li::marker { color: var(--accent); font-weight: 700; }
+    .content blockquote { margin: 26px 0; padding: 17px 20px; border-left: 3px solid var(--accent); border-radius: 0 12px 12px 0; background: color-mix(in srgb,var(--accent) 7%,var(--surface)); color: var(--muted); }
+    .content blockquote p { margin: 0; font-size: 15px; }
+    .content hr { margin: 48px 0; height: 1px; border: 0; background: var(--line); }
+    .content :not(pre) > code { padding: .16em .42em; border: 1px solid var(--line); border-radius: 5px; color: color-mix(in srgb,var(--accent) 85%,var(--text)); background: var(--surface-2); font: .88em/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .code-wrap { position: relative; margin: 24px 0 28px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--code); box-shadow: var(--shadow); }
+    .code-head { height: 38px; padding: 0 12px 0 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #252b34; color: #7e8998; font: 10px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .09em; text-transform: uppercase; }
+    .code-head::before { content: "●  ●  ●"; color: #586170; letter-spacing: 3px; }
+    .copy-btn { padding: 5px 8px; border: 0; color: #8d98a8; background: transparent; font: 10px/1 ui-monospace,SFMono-Regular,monospace; cursor: pointer; }
+    .copy-btn:hover { color: #62dafb; }
+    pre { margin: 0; padding: 20px; overflow: auto; color: #d8dee9; font: 13px/1.72 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; tab-size: 2; }
+    table { width: 100%; margin: 24px 0 30px; border-spacing: 0; border-collapse: separate; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 14px; }
+    th, td { padding: 13px 15px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.55; }
+    th:last-child, td:last-child { border-right: 0; } tr:last-child td { border-bottom: 0; }
+    th { color: var(--text); background: var(--surface-2); font-size: 12px; }
+    td { color: var(--muted); }
+    .table-scroll { overflow-x: auto; margin: 24px 0; }
+    .table-scroll table { margin: 0; min-width: 620px; }
+    .flow { margin: 32px -24px 38px; padding: 25px; border: 1px solid color-mix(in srgb,var(--accent) 35%,var(--line)); border-radius: 18px; background: radial-gradient(circle at 100% 0,color-mix(in srgb,var(--accent-2) 10%,transparent),transparent 40%),var(--surface); box-shadow: var(--shadow); }
+    .flow-top { display: flex; align-items: start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+    .flow-label { margin-bottom: 6px; color: var(--accent); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .16em; text-transform: uppercase; }
+    .flow h4 { margin: 0; font-size: 18px; letter-spacing: -.015em; }
+    .flow-counter { flex: 0 0 auto; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font: 11px/1 ui-monospace,SFMono-Regular,monospace; }
+    .flow-inputs { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: -3px 0 18px; }
+    .field { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
+    .field input, .field select { min-height: 36px; max-width: 210px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--surface-2); outline: none; }
+    .field input:focus, .field select:focus { border-color: var(--accent); }
+    .flow-stage { min-height: 164px; padding: 21px; border: 1px solid var(--line); border-radius: 13px; background: color-mix(in srgb,var(--bg) 54%,var(--surface)); overflow-x: auto; }
+    .flow-scene { min-width: 610px; min-height: 220px; margin-bottom: 20px; display: grid; place-items: center; border-bottom: 1px dashed var(--line); padding: 4px 0 20px; }
+    .flow-path { min-width: max-content; min-height: 76px; display: flex; align-items: stretch; justify-content: center; gap: 25px; }
+    .flow-node { position: relative; width: 128px; min-height: 72px; padding: 13px 12px; border: 1px solid var(--line); border-radius: 11px; display: grid; place-content: center; text-align: center; color: var(--faint); background: var(--surface); opacity: .45; transform: translateY(3px); transition: .3s ease; }
+    .flow-node:not(:last-child)::after { content: "→"; position: absolute; left: calc(100% + 8px); top: 50%; width: 10px; color: var(--faint); transform: translateY(-50%); }
+    .flow-node.active { opacity: 1; color: var(--text); border-color: color-mix(in srgb,var(--accent) 60%,var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 7%,transparent); transform: none; }
+    .flow-node.current { background: color-mix(in srgb,var(--accent) 10%,var(--surface)); }
+    .node-title { font-size: 12px; font-weight: 730; }
+    .node-detail { margin-top: 5px; color: var(--muted); font: 10px/1.35 ui-monospace,SFMono-Regular,monospace; white-space: normal; }
+    .scene-grid { width: 100%; display: grid; grid-template-columns: 1fr 54px 1fr; align-items: center; gap: 10px; }
+    .scene-grid.three { grid-template-columns: 1fr 38px 1fr 38px 1fr; }
+    .scene-pipeline { width: 100%; display: flex; align-items: center; gap: 8px; }
+    .scene-pipeline .data-card { flex: 1 0 112px; }
+    .scene-pipeline .scene-arrow { flex: 0 0 28px; }
+    .scene-arrow { display: grid; place-items: center; color: var(--faint); font-size: 22px; transition: .3s ease; }
+    .scene-arrow.hot { color: var(--accent); transform: translateX(3px); text-shadow: 0 0 14px color-mix(in srgb,var(--accent) 70%,transparent); }
+    .tree-panel { min-height: 174px; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .tree-label { margin-bottom: 12px; color: var(--muted); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .dom-tree { display: grid; justify-items: center; }
+    .dom-root, .dom-child { position: relative; border: 1px solid var(--line); background: var(--surface-2); font: 700 10px/1 ui-monospace,SFMono-Regular,monospace; transition: .35s ease; }
+    .dom-root { padding: 8px 15px; border-radius: 8px; color: var(--accent); }
+    .dom-branch { position: relative; width: 100%; padding-top: 25px; display: flex; justify-content: center; gap: 7px; }
+    .dom-branch::before { content: ""; position: absolute; top: 0; left: 50%; width: 1px; height: 17px; background: var(--line); }
+    .dom-child { min-width: 38px; padding: 7px 6px; border-radius: 6px; color: var(--muted); text-align: center; cursor: pointer; }
+    .dom-child:hover, .dom-child.selected { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,.22); outline: 2px solid color-mix(in srgb,var(--accent) 35%,transparent); outline-offset: 2px; }
+    .dom-child.keep { color: var(--good); border-color: color-mix(in srgb,var(--good) 55%,var(--line)); background: color-mix(in srgb,var(--good) 8%,var(--surface)); }
+    .dom-child.change { color: var(--warn); border-color: color-mix(in srgb,var(--warn) 60%,var(--line)); background: color-mix(in srgb,var(--warn) 10%,var(--surface)); animation: nodePulse .65s ease both; }
+    .dom-child.add { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb,var(--accent) 12%,var(--surface)); animation: nodePop .45s cubic-bezier(.2,.9,.25,1.25) both; }
+    .dom-child.remove { color: #ff7b86; border-color: #ff6675; opacity: .55; text-decoration: line-through; transform: scale(.9); }
+    @keyframes nodePop { from { opacity: 0; transform: translateY(-10px) scale(.75); } }
+    @keyframes nodePulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb,var(--warn) 12%,transparent); } }
+    .node-stack { display: grid; gap: 7px; }
+    .stack-row { display: grid; grid-template-columns: 35px 1fr; gap: 8px; align-items: center; }
+    .stack-key { color: var(--faint); font: 9px/1 ui-monospace,SFMono-Regular,monospace; }
+    .stack-item { padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: var(--surface-2); font: 700 10px/1 ui-monospace,SFMono-Regular,monospace; transition: .3s ease; }
+    .stack-item.bad { color: var(--warn); border-color: var(--warn); }
+    .stack-item.good { color: var(--good); border-color: var(--good); }
+    .stack-item.gone { color: #ff7b86; border-color: #ff6675; opacity: .5; text-decoration: line-through; }
+    .legend { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 12px; color: var(--faint); font: 9px/1 ui-monospace,SFMono-Regular,monospace; }
+    .legend i { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 2px; background: currentColor; }
+    .legend .lg-keep { color: var(--good); } .legend .lg-change { color: var(--warn); } .legend .lg-add { color: var(--accent); }
+    .data-card { min-height: 128px; padding: 15px; border: 1px solid var(--line); border-radius: 12px; display: grid; place-content: center; justify-items: center; text-align: center; background: var(--surface); transition: .3s ease; }
+    .data-card.hot { border-color: var(--accent); background: color-mix(in srgb,var(--accent) 9%,var(--surface)); box-shadow: 0 0 0 4px color-mix(in srgb,var(--accent) 6%,transparent); }
+    .data-icon { width: 42px; height: 42px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 12px; display: grid; place-items: center; color: var(--accent); background: var(--surface-2); font: 800 15px/1 ui-monospace,SFMono-Regular,monospace; }
+    .data-name { font-size: 11px; font-weight: 750; }
+    .data-value { max-width: 150px; margin-top: 5px; color: var(--muted); font: 9px/1.35 ui-monospace,SFMono-Regular,monospace; overflow-wrap: anywhere; }
+    .timeline { width: 100%; display: grid; gap: 18px; }
+    .timeline-row { display: grid; grid-template-columns: 76px 1fr; gap: 12px; align-items: center; }
+    .timeline-label { color: var(--muted); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; text-align: right; }
+    .timeline-track { height: 38px; padding: 5px; border: 1px solid var(--line); border-radius: 9px; display: flex; gap: 5px; background: var(--surface); }
+    .work-block { flex: 1; border-radius: 5px; display: grid; place-items: center; color: var(--muted); background: var(--surface-3); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; }
+    .work-block.on { color: var(--text); background: color-mix(in srgb,var(--accent-2) 42%,var(--surface-2)); }
+    .work-block.event { color: #101419; background: var(--warn); animation: nodePop .4s ease both; }
+    .work-block.pause { flex: .45; color: var(--accent); border: 1px dashed var(--accent); background: transparent; }
+    .flow-explain { min-height: 44px; margin-top: 15px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .flow-controls { margin-top: 17px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .step-dots { display: flex; gap: 6px; }
+    .step-dot { width: 27px; height: 5px; border: 0; border-radius: 4px; background: var(--line); cursor: pointer; }
+    .step-dot.active { background: var(--accent); }
+    .run-btn { min-width: 106px; padding: 9px 14px; border: 1px solid color-mix(in srgb,var(--accent) 65%,var(--line)); border-radius: 9px; color: var(--bg); background: var(--accent); font-size: 12px; font-weight: 750; cursor: pointer; }
+    :root[data-theme="dark"] .run-btn, :root:not([data-theme]) .run-btn { color: #071014; }
+    .run-btn:hover { filter: brightness(1.06); }
+    .xss-lab { width: 100%; display: grid; grid-template-columns: 1fr 42px 1fr; align-items: stretch; gap: 10px; }
+    .xss-panel { min-height: 174px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .xss-panel.bad { border-color: color-mix(in srgb,#ff6675 60%,var(--line)); }
+    .xss-panel.good { border-color: color-mix(in srgb,var(--good) 60%,var(--line)); }
+    .xss-label { margin-bottom: 10px; color: var(--muted); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .xss-output { min-height: 83px; padding: 11px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); background: var(--surface-2); font: 11px/1.55 ui-monospace,SFMono-Regular,monospace; overflow-wrap: anywhere; }
+    .xss-frame { width: 100%; height: 83px; border: 1px dashed var(--line); border-radius: 8px; background: #fff; }
+    .xss-proof { margin-top: 10px; padding: 9px 10px; border-radius: 7px; color: var(--muted); background: var(--surface-2); font-size: 11px; line-height: 1.45; }
+    .xss-proof.danger { color: #ff8b95; background: color-mix(in srgb,#ff6675 10%,var(--surface-2)); }
+    .xss-proof.safe { color: var(--good); background: color-mix(in srgb,var(--good) 10%,var(--surface-2)); }
+    .chapter-nav { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .nav-btn { min-height: 76px; padding: 15px 17px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); cursor: pointer; text-align: left; }
+    .nav-btn.next { text-align: right; }
+    .nav-btn:hover { border-color: color-mix(in srgb,var(--accent) 65%,var(--line)); transform: translateY(-1px); }
+    .nav-dir { display: block; color: var(--accent); font: 700 10px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .nav-title { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .nav-spacer { visibility: hidden; }
+    .scrim { display: none; }
+    .empty { padding: 60px 0; color: var(--muted); }
+    @media (max-width: 920px) {
+      :root { --sidebar: 0px; }
+      .sidebar { width: min(86vw,310px); transform: translateX(-101%); transition: transform .25s ease; box-shadow: var(--shadow); }
+      body.menu-open .sidebar { transform: none; }
+      .scrim { position: fixed; z-index: 65; inset: 0; background: rgba(0,0,0,.58); }
+      body.menu-open .scrim { display: block; }
+      .menu-btn { display: grid; }
+      .topbar { left: 0; padding: 0 16px; }
+      .topbar-title { display: none; }
+      .main { margin-left: 0; padding: 98px 20px 55px; }
+    }
+    @media (max-width: 620px) {
+      .main { padding-inline: 16px; }
+      .chapter-count { font-size: 11px; }
+      .content h2 { margin-bottom: 28px; }
+      .content h3 { margin-top: 46px; }
+      .content p, .content li { font-size: 15px; line-height: 1.78; }
+      .flow { margin-inline: -8px; padding: 18px; border-radius: 15px; }
+      .flow-top { gap: 8px; }
+      .flow-stage { padding: 17px; }
+      .flow-scene { min-width: 560px; }
+      .flow-path { justify-content: flex-start; }
+      .xss-lab { grid-template-columns: 1fr; }
+      .xss-lab > .scene-arrow { transform: rotate(90deg); }
+      .chapter-nav { grid-template-columns: 1fr; }
+      .nav-btn.next { text-align: left; }
+      .nav-spacer { display: none; }
+      pre { font-size: 12px; padding: 17px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *,*::before,*::after { scroll-behavior: auto!important; animation-duration: .01ms!important; transition-duration: .01ms!important; } }
+  </style>
+</head>
+<body>
+  <div class="progress-rail"><div class="progress-bar" id="progressBar"></div></div>
+  <aside class="sidebar" id="sidebar" aria-label="Danh sách chương">
+    <div class="brand"><div class="brand-mark">R</div><div><strong>React Explorer</strong><span>Deep learning notes</span></div></div>
+    <div class="side-label">Các chương</div>
+    <ol class="chapter-list" id="chapterList"></ol>
+    <div class="source-meta" id="sourceMeta"></div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+  <header class="topbar">
+    <div class="top-actions"><button class="icon-btn menu-btn" id="menuBtn" aria-label="Mở danh sách chương">☰</button><div class="topbar-title"><div class="eyebrow">React Explorer</div><div class="current-title" id="currentTitle"></div></div></div>
+    <div class="top-actions"><span class="chapter-count" id="chapterCount"></span><button class="icon-btn" id="themeBtn" aria-label="Đổi giao diện sáng tối">◐</button></div>
+  </header>
+  <main class="main"><div class="reader"><div class="chapter-kicker" id="chapterKicker"></div><article class="content" id="content"></article><nav class="chapter-nav" id="chapterNav"></nav></div></main>
+  <script>
+    const SOURCE_B64 = '${encodedSource}';
+    const SOURCE = new TextDecoder().decode(Uint8Array.from(atob(SOURCE_B64), c => c.charCodeAt(0)));
+
+    const escapeHtml = value => value.replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    const slugify = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+    const inline = source => {
+      const codes = [];
+      let text = escapeHtml(source).replace(/\x60([^\x60]+)\x60/g, (_, code) => { codes.push('<code>' + code + '</code>'); return '@@CODE' + (codes.length - 1) + '@@'; });
+      text = text.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/(?<!\*)\*([^*]+)\*(?!\*)/g,'<em>$1</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+      return text.replace(/@@CODE(\d+)@@/g, (_, index) => codes[Number(index)]);
+    };
+
+    function splitSource(source) {
+      const matches = [...source.matchAll(/^## (.+)$/gm)];
+      const preface = source.slice(0, matches[0].index).trim();
+      return matches.map((match, index) => {
+        const start = match.index;
+        const end = matches[index + 1]?.index ?? source.length;
+        const raw = source.slice(start, end).trim();
+        return { index, title: match[1], slug: 'chuong-' + (index + 1) + '-' + slugify(match[1]), raw: index === 0 ? preface + '\n\n' + raw : raw };
+      });
+    }
+
+    function blockTokens(markdown) {
+      const lines = markdown.replace(/\r/g,'').split('\n');
+      const tokens = [];
+      let i = 0;
+      const isSpecial = line => /^(#{1,6})\s+/.test(line) || /^\x60\x60\x60/.test(line) || /^>\s?/.test(line) || /^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line) || /^\s*([-+*]|\d+\.)\s+/.test(line);
+      while (i < lines.length) {
+        const line = lines[i];
+        if (!line.trim()) { i++; continue; }
+        if (/^\x60\x60\x60/.test(line)) {
+          const lang = line.slice(3).trim() || 'code'; const code = []; i++;
+          while (i < lines.length && !/^\x60\x60\x60/.test(lines[i])) code.push(lines[i++]);
+          if (i < lines.length) i++;
+          tokens.push({ type:'code', lang, raw:code.join('\n') }); continue;
+        }
+        const heading = line.match(/^(#{1,6})\s+(.+)$/);
+        if (heading) { tokens.push({ type:'heading', level:heading[1].length, raw:heading[2] }); i++; continue; }
+        if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)) { tokens.push({type:'hr',raw:''}); i++; continue; }
+        if (/^>\s?/.test(line)) {
+          const quote=[]; while (i < lines.length && (/^>\s?/.test(lines[i]) || !lines[i].trim())) { quote.push(lines[i].replace(/^>\s?/,'')); i++; }
+          tokens.push({type:'quote',raw:quote.join(' ').trim()}); continue;
+        }
+        if (line.includes('|') && i + 1 < lines.length && /^\s*\|?\s*:?-+/.test(lines[i+1])) {
+          const rows=[line]; i += 2; while(i < lines.length && lines[i].includes('|') && lines[i].trim()) rows.push(lines[i++]);
+          tokens.push({type:'table',raw:rows.join('\n'),rows:rows.map(row => row.trim().replace(/^\||\|$/g,'').split('|').map(cell=>cell.trim()))}); continue;
+        }
+        const listMatch = line.match(/^\s*([-+*]|\d+\.)\s+(.+)$/);
+        if (listMatch) {
+          const ordered=/\d+\./.test(listMatch[1]); const items=[];
+          while(i < lines.length) {
+            const match=lines[i].match(/^\s*([-+*]|\d+\.)\s+(.+)$/); if(!match || /\d+\./.test(match[1]) !== ordered) break;
+            let item=match[2]; i++; while(i < lines.length && lines[i].trim() && !isSpecial(lines[i]) && !(lines[i].includes('|') && i+1<lines.length && /^\s*\|?\s*:?-+/.test(lines[i+1]))) item += ' ' + lines[i++].trim(); items.push(item);
+          }
+          tokens.push({type:'list',ordered,items,raw:items.join('\n')}); continue;
+        }
+        const paragraph=[line.trim()]; i++;
+        while(i < lines.length && lines[i].trim() && !isSpecial(lines[i]) && !(lines[i].includes('|') && i+1<lines.length && /^\s*\|?\s*:?-+/.test(lines[i+1]))) paragraph.push(lines[i++].trim());
+        tokens.push({type:'paragraph',raw:paragraph.join(' ')});
+      }
+      return tokens;
+    }
+
+    function tokenHtml(token) {
+      if (token.type === 'heading') return '<h' + token.level + ' id="' + slugify(token.raw) + '">' + inline(token.raw) + '</h' + token.level + '>';
+      if (token.type === 'paragraph') return '<p>' + inline(token.raw) + '</p>';
+      if (token.type === 'quote') return '<blockquote><p>' + inline(token.raw) + '</p></blockquote>';
+      if (token.type === 'hr') return '<hr>';
+      if (token.type === 'code') return '<div class="code-wrap"><div class="code-head"><span>' + escapeHtml(token.lang) + '</span><button class="copy-btn" type="button">Sao chép</button></div><pre><code>' + escapeHtml(token.raw) + '</code></pre></div>';
+      if (token.type === 'list') { const tag=token.ordered?'ol':'ul'; return '<'+tag+'>'+token.items.map(item=>'<li>'+inline(item)+'</li>').join('')+'</'+tag+'>'; }
+      if (token.type === 'table') { const [head,...rows]=token.rows; return '<div class="table-scroll"><table><thead><tr>'+head.map(cell=>'<th>'+inline(cell)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(cell=>'<td>'+inline(cell)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'; }
+      return '';
+    }
+
+    const FLOW_DEFS = {
+      xssLab: { title:'XSS: cùng một dữ liệu, hai cách render', anchor:'Demo bên dưới dùng payload vô hại', steps:[
+        {name:'Input',detail:'name=<script>…',text:'Kẻ tấn công kiểm soát giá trị name trong request. Ở bước này nó vẫn chỉ là một chuỗi dữ liệu.'},
+        {name:'Ghép chuỗi',detail:'HTML chứa payload',text:'Server nối dữ liệu vào template mà không encode, làm mất ranh giới giữa text và HTML/JavaScript.'},
+        {name:'Browser parse',detail:'JavaScript chạy',text:'Khung sandbox thực thi payload minh họa vô hại và đổi dòng trạng thái — bằng chứng trình duyệt đã hiểu dữ liệu là mã.'},
+        {name:'Encode output',detail:'< → &lt;',text:'Khi encode đúng, cùng payload chỉ xuất hiện như văn bản; trình duyệt không tạo thẻ script và không chạy mã.'}
+      ]},
+      repaint: { title:'Vẽ lại toàn bộ vs chỉ vá phần đổi', anchor:'render lại cả 1000 tin nhắn cũ + 1 tin mới', fields:[{key:'size',label:'Số tin nhắn cũ',type:'number',value:'1000'}], build:v=>[
+        {name:'Tin nhắn mới',detail:'+ 1 item',text:'Một tin nhắn mới được thêm vào danh sách.'},
+        {name:'Ghi đè toàn bộ',detail:(v.size||1000)+' node cũ bị dựng lại',text:'Cách truyền thống ghi đè toàn bộ DOM dù chỉ có một phần tử đổi.'},
+        {name:'Tính phần khác biệt',detail:'VDOM mới ↔ VDOM cũ',text:'React so sánh hai cây trong bộ nhớ để tìm đúng phần khác biệt.'},
+        {name:'Vá đúng phần đổi',detail:'tạo 1 DOM node',text:'DOM thật chỉ nhận bản vá tối thiểu cho tin nhắn mới.'}
+      ]},
+      oneWay: { title:'One-way Data Flow', anchor:'function Child({ onIncrease })', steps:[
+        {name:'Child',detail:'click “Tăng”',text:'Child phát sinh tương tác nhưng không tự sửa state.'},
+        {name:'Callback đi lên',detail:'onIncrease()',text:'Child gọi callback function mà Parent đã truyền xuống.'},
+        {name:'Parent',detail:'setCount(count + 1)',text:'Parent — nơi sở hữu state — quyết định cập nhật count.'},
+        {name:'Props đi xuống',detail:'Parent → Child',text:'Giá trị mới tiếp tục chảy từ cha xuống con qua props.'}
+      ]},
+      jsx: { title:'JSX → object JavaScript', anchor:"children: 'Hello'", steps:[
+        {name:'JSX',detail:'<h1>Hello</h1>',text:'Bạn viết JSX để mô tả giao diện.'},
+        {name:'Babel',detail:'transform',text:'JSX bắt buộc qua bước biên dịch trước khi trình duyệt chạy.'},
+        {name:'Object JS',detail:"type: 'h1' · props.children",text:'Kết quả là object JavaScript mô tả giao diện, không phải HTML thật.'}
+      ]},
+      reconciliation: { title:'Reconciliation — 4 giai đoạn', anchor:'messages.map(msg => <div key={msg.id}', steps:[
+        {name:'First Paint',detail:'VDOM đầu tiên → DOM thật',text:'React dựng cây VDOM đầu tiên và xuất DOM thật tương ứng.'},
+        {name:'Trigger & Re-render',detail:'state đổi · VDOM mới',text:'Component chạy lại và chỉ tính cây VDOM mới trong bộ nhớ.'},
+        {name:'Diffing',detail:'VDOM mới ↔ cũ',text:'React so sánh hai cây để tìm chính xác điểm khác biệt.'},
+        {name:'Commit',detail:'patch tối thiểu → DOM',text:'React áp đúng phần khác biệt lên DOM thật.'}
+      ]},
+      keys: { title:'Xóa A: key=index vs key=id', anchor:'key={item.id} data={item}', fields:[{key:'items',label:'Danh sách (xóa phần tử đầu)',type:'text',value:'A, B, C'}], build:v=>{
+        const items=(v.items||'A, B, C').split(',').map(x=>x.trim()).filter(Boolean); const after=items.slice(1); const first=items[0]||'A';
+        return [
+          {name:'Trước khi xóa',detail:items.map((x,i)=>x+' / key='+i).join(' · '),text:'Danh sách ban đầu dùng vị trí làm key.'},
+          {name:'Xóa '+first,detail:after.map((x,i)=>x+' / key='+i).join(' · ')||'Danh sách rỗng',text:'Với key=index, key cũ được gắn sang item khác nên state nội bộ có thể “dính” sai.'},
+          {name:'Dùng key=id',detail:after.map(x=>x+' / key='+x).join(' · ')||'Danh sách rỗng',text:'Với id ổn định, React nhận diện đúng '+first+' biến mất; các item còn lại giữ nguyên danh tính.'}
+        ];
+      }},
+      fiber: { title:'Stack Reconciler vs React Fiber', anchor:'cơ chế này gọi là **time slicing**', steps:[
+        {name:'Stack',detail:'A → B → C → D',text:'Stack Reconciler chạy một khối đồng bộ và không thể dừng giữa chừng.'},
+        {name:'Main thread',detail:'bị chiếm dụng',text:'Công việc lớn có thể khiến scroll, click và animation bị giật.'},
+        {name:'Fiber',detail:'A · B  | pause |  C · D',text:'Fiber chia nhỏ công việc, có thể tạm dừng và tiếp tục.'},
+        {name:'Nhường ưu tiên',detail:'click / tương tác',text:'React nhường main thread cho tương tác ưu tiên cao hơn rồi quay lại render.'}
+      ]},
+      hooks: { title:'Class lifecycle ↔ useEffect + cleanup', anchor:'Cả "đăng ký" và "dọn dẹp" nằm CHUNG một khối', steps:[
+        {name:'Class · Mount',detail:'componentDidMount',text:'Class đặt logic đăng ký trong componentDidMount.'},
+        {name:'Hook · Effect',detail:'useEffect',text:'Hook đặt logic đăng ký trong callback của useEffect.'},
+        {name:'Class · Unmount',detail:'componentWillUnmount',text:'Class tách logic dọn dẹp sang lifecycle method khác.'},
+        {name:'Hook · Cleanup',detail:'return () => ...',text:'Hook đặt cleanup ngay cùng khối với logic đăng ký liên quan.'}
+      ]},
+      redux: { title:'Luồng cập nhật Redux', anchor:'dispatch(removeItem(item.id))', fields:[{key:'action',label:'Action',type:'select',options:['addItem(product)','removeItem(item.id)','applyDiscount(percent)']}], build:v=>[
+        {name:'dispatch',detail:v.action||'addItem(product)',text:'Component chỉ yêu cầu thay đổi qua dispatch, không tự sửa state.'},
+        {name:'reducer',detail:'cartSlice.reducers',text:'Reducer là nơi duy nhất xử lý action theo quy tắc đã định nghĩa.'},
+        {name:'store update',detail:'state mới · immutable',text:'Store nhận state mới; với RTK, Immer đảm bảo immutable phía sau.'},
+        {name:'useSelector',detail:'state.cart.items',text:'Component đọc lại đúng phần dữ liệu cần dùng từ store.'},
+        {name:'UI',detail:'render lại',text:'UI phản ánh dữ liệu mới sau khi store cập nhật.'}
+      ]},
+      batching: { title:'Batching: giá trị cũ vs functional update', anchor:'count tăng đúng 3, vì mỗi lần React đưa', steps:[
+        {name:'Giá trị ban đầu',detail:'count = 0',text:'Cả hai cách đều bắt đầu với count bằng 0.'},
+        {name:'Dạng count + 1',detail:'1 · 1 · 1',text:'Ba lời gọi cùng đọc count cũ bằng 0, nên đều yêu cầu cập nhật thành 1.'},
+        {name:'Functional update',detail:'0 → 1 → 2 → 3',text:'Mỗi callback nhận prev mới nhất từ lần cập nhật ngay trước.'},
+        {name:'Commit',detail:'sai: 1 · đúng: 3',text:'React batching thành một lần render; functional update vẫn tạo kết quả đúng là 3.'}
+      ]},
+      requestReducer: { title:'useReducer: request chỉ có state hợp lệ', anchor:'return <div>{state.data.name}</div>;', fields:[{key:'requestAction',label:'Kết quả request',type:'select',options:['FETCH_SUCCESS','FETCH_ERROR']}], build:v=>[
+        {name:'dispatch',detail:'FETCH_START',text:'Bắt đầu request bằng một action duy nhất.'},
+        {name:'reducer',detail:'loading=true · error=null',text:'Reducer trả về đầy đủ một object state hợp lệ cho trạng thái đang tải.'},
+        {name:'fetch',detail:v.requestAction||'FETCH_SUCCESS',text:'Request hoàn thành và dispatch action tương ứng.'},
+        {name:'state mới',detail:(v.requestAction==='FETCH_ERROR'?'loading=false · error=err':'loading=false · data=json'),text:'Reducer đồng bộ data, isLoading và error trong một lần.'},
+        {name:'UI',detail:v.requestAction==='FETCH_ERROR'?'Lỗi: error.message':'state.data.name',text:'UI chọn đúng nhánh từ state mới.'}
+      ]},
+      effectCycle: { title:'Vòng chạy của useEffect và cleanup', anchor:'}, [dependencies]);', steps:[
+        {name:'Render',detail:'component chạy',text:'Component render trước; effect chưa chạy trong lúc render.'},
+        {name:'Effect',detail:'đăng ký side effect',text:'Sau render, React chạy callback của useEffect.'},
+        {name:'Dependency đổi',detail:'render tiếp theo',text:'Khi dependency đổi, component tạo render mới.'},
+        {name:'Cleanup',detail:'return () => ...',text:'React chạy cleanup của effect cũ trước khi chạy effect mới.'},
+        {name:'Effect mới',detail:'dependency mới',text:'Effect được đăng ký lại với giá trị dependency mới.'}
+      ]},
+      fetchCleanup: { title:'userId đổi: cleanup chặn response cũ', anchor:'return user ? <div>{user.name}</div>', fields:[{key:'userId',label:'userId mới',type:'text',value:'2'}], build:v=>[
+        {name:'Effect cũ',detail:'fetch /users/1',text:'Request cho userId cũ đang chạy.'},
+        {name:'userId đổi',detail:'1 → '+(v.userId||'2'),text:'Dependency đổi làm component render lại.'},
+        {name:'Cleanup',detail:'cancelled = true',text:'Cleanup đánh dấu request cũ đã bị hủy trước khi effect mới chạy.'},
+        {name:'Effect mới',detail:'fetch /users/'+(v.userId||'2'),text:'Effect mới gửi request theo userId mới.'},
+        {name:'setUser',detail:'chỉ response mới',text:'Điều kiện !cancelled ngăn response cũ ghi đè dữ liệu mới.'}
+      ]},
+      staleClosure: { title:'Stale closure: vì sao count đứng ở 1', anchor:'effect chỉ chạy 1 LẦN DUY NHẤT', steps:[
+        {name:'Mount',detail:'count = 0',text:'Effect chạy một lần khi mount.'},
+        {name:'Closure',detail:'callback giữ count = 0',text:'Callback của interval đóng gói giá trị count tại thời điểm được tạo.'},
+        {name:'Tick 1',detail:'0 + 1 → setCount(1)',text:'Lần đầu state đổi từ 0 thành 1 và UI render lại.'},
+        {name:'Tick 2, 3…',detail:'vẫn 0 + 1 → 1',text:'Interval vẫn dùng callback cũ; React nhận lại giá trị 1 nên không render tiếp.'}
+      ]},
+      memo: { title:'useMemo: dependency quyết định có filter lại', anchor:'}, [products, keyword]);', fields:[{key:'memoCase',label:'Lần render tiếp theo',type:'select',options:['Parent re-render, deps giữ nguyên','keyword đổi']}], build:v=>[
+        {name:'Render',detail:'ProductList',text:'Component được gọi lại.'},
+        {name:'So sánh deps',detail:'[products, keyword]',text:'useMemo so sánh reference products và giá trị keyword với lần trước.'},
+        {name:v.memoCase==='keyword đổi'?'Cache miss':'Cache hit',detail:v.memoCase==='keyword đổi'?'chạy filter 10.000 item':'dùng filtered đã nhớ',text:v.memoCase==='keyword đổi'?'Dependency đổi nên hàm filter chạy lại.':'Dependencies giữ nguyên nên React trả lại kết quả đã ghi nhớ.'},
+        {name:'Render danh sách',detail:'filtered.map(...)',text:'UI nhận cùng một kết quả, nhưng tránh được tính toán thừa khi cache hit.'}
+      ]},
+      callbackMemo: { title:'useCallback giữ reference cho React.memo', anchor:'ExpensiveChild render', steps:[
+        {name:'Parent render',detail:'count đổi',text:'State của Parent đổi làm Parent render lại.'},
+        {name:'useCallback',detail:'dependency []',text:'useCallback trả lại đúng reference handleClick từ lần trước.'},
+        {name:'React.memo',detail:'so sánh prop onClick',text:'React.memo thấy prop onClick không đổi reference.'},
+        {name:'ExpensiveChild',detail:'bỏ qua re-render',text:'Component con không render lại vì props vẫn giống nhau.'}
+      ]},
+      contextFlow: { title:'Context bỏ qua các tầng props trung gian', anchor:'const user = useContext(UserContext)', steps:[
+        {name:'Provider',detail:'value={user}',text:'UserContext.Provider cung cấp user cho toàn bộ cây con.'},
+        {name:'Layout',detail:'không nhận user prop',text:'Layout chỉ nằm trong cây, không cần truyền hộ dữ liệu.'},
+        {name:'Section / Panel',detail:'không prop drilling',text:'Các tầng trung gian tiếp tục không cần biết đến user.'},
+        {name:'ProfileCard',detail:'useContext(UserContext)',text:'ProfileCard đọc trực tiếp giá trị từ Provider gần nhất.'}
+      ]}
+    };
+
+    const FLOW_BY_CHAPTER = { 0:['xssLab','repaint'], 1:['oneWay'], 2:['jsx'], 3:['reconciliation','keys','fiber'], 4:['hooks'], 5:['batching','requestReducer','effectCycle','fetchCleanup','staleClosure','memo','callbackMemo'], 6:['contextFlow','redux'] };
+    const chapters = splitSource(SOURCE);
+    let current = 0;
+    let completed = new Set(JSON.parse(localStorage.getItem('react-explorer-completed') || '[]'));
+
+    function flowHtml(id, def) {
+      const fields=(def.fields||[]).map(field=>{
+        const control=field.type==='select' ? '<select data-field="'+field.key+'">'+field.options.map(x=>'<option>'+escapeHtml(x)+'</option>').join('')+'</select>' : '<input data-field="'+field.key+'" type="'+field.type+'" value="'+escapeHtml(field.value)+'" min="1">';
+        return '<label class="field">'+escapeHtml(field.label)+control+'</label>';
+      }).join('');
+      return '<section class="flow" data-flow="'+id+'"><div class="flow-top"><div><div class="flow-label">Interactive flow</div><h4>'+escapeHtml(def.title)+'</h4></div><span class="flow-counter">1 / 1</span></div>'+(fields?'<div class="flow-inputs">'+fields+'</div>':'')+'<div class="flow-stage"><div class="flow-scene"></div><div class="flow-path"></div><div class="flow-explain"></div></div><div class="flow-controls"><div class="step-dots"></div><button class="run-btn" type="button">Chạy →</button></div></section>';
+    }
+
+    function renderMarkdown(chapter) {
+      const tokens=blockTokens(chapter.raw); const flowIds=FLOW_BY_CHAPTER[chapter.index]||[]; const pending=new Set(flowIds); let html='';
+      for (const token of tokens) {
+        html += tokenHtml(token);
+        for (const id of [...pending]) {
+          if (token.raw.includes(FLOW_DEFS[id].anchor)) { html += flowHtml(id,FLOW_DEFS[id]); pending.delete(id); }
+        }
+      }
+      for (const id of pending) html += flowHtml(id,FLOW_DEFS[id]);
+      return html;
+    }
+
+    function domTree(label, items, states, rootLabel) {
+      const children=items.map((item,index)=>'<button type="button" class="dom-child '+escapeHtml(states[index]||'')+'" data-dom-node="'+escapeHtml(String(item))+'" aria-label="Xem trạng thái node '+escapeHtml(String(item))+'">'+escapeHtml(String(item))+'</button>').join('');
+      return '<div class="tree-panel"><div class="tree-label">'+escapeHtml(label)+'</div><div class="dom-tree"><div class="dom-root">'+escapeHtml(rootLabel||'div')+'</div><div class="dom-branch">'+children+'</div></div><div class="legend"><span class="lg-keep"><i></i>giữ nguyên</span><span class="lg-change"><i></i>cập nhật lại</span><span class="lg-add"><i></i>node mới</span></div></div>';
+    }
+
+    function dataCard(icon,name,value,hot) {
+      return '<div class="data-card '+(hot?'hot':'')+'"><div class="data-icon">'+escapeHtml(icon)+'</div><div class="data-name">'+escapeHtml(name)+'</div><div class="data-value">'+escapeHtml(value)+'</div></div>';
+    }
+
+    function sceneHtml(id, step, values) {
+      if (id==='xssLab') {
+        const rawPayload='<script>document.getElementById("proof").textContent="⚠ JavaScript đã chạy";document.getElementById("proof").style.color="#b42318"</scr'+'ipt>';
+        const payloadLabel='?name=<script>…</scr'+'ipt>';
+        const vulnerable='<h1>Chào mừng, '+rawPayload+'!</h1>';
+        const encoded='<h1>Chào mừng, &lt;script&gt;...&lt;/script&gt;!</h1>';
+        if(step===0) return '<div class="scene-grid">'+dataCard('GET','Request',payloadLabel,true)+'<div class="scene-arrow hot">→</div>'+dataCard('PHP','\u0024_GET[\'name\']','chuỗi do người dùng kiểm soát',false)+'</div>';
+        if(step===1) return '<div class="xss-lab"><div class="xss-panel bad"><div class="xss-label">Không encode · response HTML</div><div class="xss-output">'+escapeHtml(vulnerable)+'</div><div class="xss-proof danger">Ranh giới data/code đã bị phá vỡ</div></div><div class="scene-arrow hot">→</div><div class="xss-panel"><div class="xss-label">Trình duyệt sẽ parse</div><div class="xss-output">Thẻ &lt;h1&gt; được tạo<br>Thẻ &lt;script&gt; cũng được tạo<br>JavaScript trở thành mã thực thi</div></div></div>';
+        if(step===2) {
+          const sandboxDoc='<style>body{margin:0;padding:12px;font:13px system-ui;background:#fff;color:#333}#proof{margin-top:8px;padding:8px;border-radius:6px;background:#fff1f0}</style><strong>Chào mừng!</strong><div id="proof">Chưa chạy JavaScript</div><script>document.getElementById("proof").textContent="⚠ JavaScript đã chạy trong sandbox";document.getElementById("proof").style.color="#b42318"</scr'+'ipt>';
+          return '<div class="xss-lab"><div class="xss-panel bad"><div class="xss-label">Kết quả vulnerable · sandbox cô lập</div><iframe class="xss-frame" sandbox="allow-scripts" title="Minh họa payload XSS vô hại" srcdoc="'+escapeHtml(sandboxDoc)+'"></iframe><div class="xss-proof danger">Payload chỉ đổi chữ trong iframe, không đọc cookie và không gọi mạng.</div></div><div class="scene-arrow hot">≠</div><div class="xss-panel good"><div class="xss-label">Mục tiêu đúng</div><div class="xss-output">Dữ liệu phải được hiển thị nguyên dạng như text, không được trở thành node HTML.</div></div></div>';
+        }
+        return '<div class="xss-lab"><div class="xss-panel good"><div class="xss-label">Có output encoding · response HTML</div><div class="xss-output">'+escapeHtml(encoded)+'</div><div class="xss-proof safe">✓ Trình duyệt hiển thị payload như chữ</div></div><div class="scene-arrow hot">→</div><div class="xss-panel good"><div class="xss-label">React JSX mặc định</div><div class="xss-output">&lt;h1&gt;Chào mừng, {username}!&lt;/h1&gt;</div><div class="xss-proof safe">✓ Giá trị nội suy được escape</div></div></div>';
+      }
+      if (id==='repaint') {
+        const size=Math.max(1,Number(values.size)||1000); const sample=['#1','#2','#3','…','#'+size];
+        if(step===0) return '<div class="scene-grid">'+domTree('DOM hiện tại · '+size+' tin nhắn',sample,['keep','keep','keep','keep','keep'],'chat-box')+'<div class="scene-arrow hot">＋</div>'+dataCard('＋','Tin nhắn mới','#'+(size+1),true)+'</div>';
+        if(step===1) return '<div class="scene-grid">'+domTree('DOM cũ',sample,['remove','remove','remove','remove','remove'],'chat-box')+'<div class="scene-arrow hot">→</div>'+domTree('innerHTML · dựng lại '+(size+1)+' node',['#1','#2','#3','…','#'+(size+1)],['change','change','change','change','change'],'chat-box')+'</div>';
+        if(step===2) return '<div class="scene-grid">'+domTree('VDOM cũ',sample,['keep','keep','keep','keep','keep'],'div')+'<div class="scene-arrow hot">↔</div>'+domTree('VDOM mới',['#1','#2','#3','…','#'+(size+1)],['keep','keep','keep','keep','add'],'div')+'</div>';
+        return '<div class="scene-grid">'+dataCard('Δ','Patch tối thiểu','INSERT node #'+(size+1),true)+'<div class="scene-arrow hot">→</div>'+domTree('DOM thật sau Commit',['#1','#2','#3','…','#'+(size+1)],['keep','keep','keep','keep','add'],'chat-box')+'</div>';
+      }
+      if (id==='reconciliation') {
+        const oldTree=domTree('VDOM cũ',['h1','p','button'],['keep','keep','keep'],'App');
+        const newTree=domTree('VDOM mới',['h1','p','button'],['keep',step>=1?'change':'keep','keep'],'App');
+        if(step===0) return '<div class="scene-grid">'+dataCard('JS','Component','lần render đầu tiên',true)+'<div class="scene-arrow hot">→</div>'+domTree('DOM thật',['h1','p','button'],['add','add','add'],'App')+'</div>';
+        if(step===1) return '<div class="scene-grid">'+dataCard('S','state','setCount → component chạy lại',true)+'<div class="scene-arrow hot">→</div>'+newTree+'</div>';
+        if(step===2) return '<div class="scene-grid">'+oldTree+'<div class="scene-arrow hot">↔</div>'+newTree+'</div>';
+        return '<div class="scene-grid">'+dataCard('Δ','Patch','chỉ cập nhật node <p>',true)+'<div class="scene-arrow hot">→</div>'+domTree('DOM thật',['h1','p','button'],['keep','change','keep'],'App')+'</div>';
+      }
+      if (id==='keys') {
+        const items=(values.items||'A, B, C').split(',').map(x=>x.trim()).filter(Boolean); const first=items[0]||'A'; const after=items.slice(1);
+        const rows=(list,keyMode,state)=>list.map((item,index)=>'<div class="stack-row"><span class="stack-key">key='+escapeHtml(keyMode==='id'?item:String(index))+'</span><span class="stack-item '+state+'">Item '+escapeHtml(item)+' · state['+escapeHtml(item)+']</span></div>').join('')||'<div class="stack-item">Danh sách rỗng</div>';
+        if(step===0) return '<div class="scene-grid"><div class="tree-panel"><div class="tree-label">key=index · trước khi xóa</div><div class="node-stack">'+rows(items,'index','')+'</div></div><div class="scene-arrow">＝</div><div class="tree-panel"><div class="tree-label">key=id · trước khi xóa</div><div class="node-stack">'+rows(items,'id','good')+'</div></div></div>';
+        if(step===1) return '<div class="scene-grid"><div class="tree-panel"><div class="tree-label">Xóa '+escapeHtml(first)+' · key=index</div><div class="node-stack">'+rows(after,'index','bad')+'</div><div class="legend"><span class="lg-change"><i></i>state cũ bị gắn nhầm item</span></div></div><div class="scene-arrow hot">⚠</div>'+dataCard('0','key không đổi','key=0: '+first+' → '+(after[0]||'rỗng'),true)+'</div>';
+        return '<div class="scene-grid"><div class="tree-panel"><div class="tree-label">Xóa '+escapeHtml(first)+' · key=id</div><div class="node-stack">'+rows(after,'id','good')+'</div><div class="legend"><span class="lg-keep"><i></i>state đúng item được giữ</span></div></div><div class="scene-arrow hot">✓</div>'+dataCard('ID','Danh tính ổn định',first+' biến mất · '+after.join(', ')+' giữ nguyên',true)+'</div>';
+      }
+      if (id==='batching') {
+        return '<div class="timeline"><div class="timeline-row"><div class="timeline-label">count + 1</div><div class="timeline-track"><span class="work-block '+(step>=0?'on':'')+'">count=0</span><span class="work-block '+(step>=1?'event':'')+'">→ 1</span><span class="work-block '+(step>=1?'event':'')+'">→ 1</span><span class="work-block '+(step>=1?'event':'')+'">→ 1</span><span class="work-block '+(step>=3?'on':'')+'">commit 1</span></div></div><div class="timeline-row"><div class="timeline-label">prev + 1</div><div class="timeline-track"><span class="work-block '+(step>=0?'on':'')+'">prev=0</span><span class="work-block '+(step>=2?'on':'')+'">→ 1</span><span class="work-block '+(step>=2?'on':'')+'">→ 2</span><span class="work-block '+(step>=2?'on':'')+'">→ 3</span><span class="work-block '+(step>=3?'event':'')+'">commit 3</span></div></div></div>';
+      }
+      if (id==='contextFlow') {
+        return '<div class="scene-grid">'+dataCard('P','UserContext.Provider','value = user',step===0)+'<div class="scene-arrow '+(step>=1?'hot':'')+'">↘</div><div class="tree-panel"><div class="tree-label">Cây component · dữ liệu đi thẳng qua Context</div><div class="node-stack"><div class="stack-row"><span class="stack-key">01</span><span class="stack-item">Layout · không user prop</span></div><div class="stack-row"><span class="stack-key">02</span><span class="stack-item">Section / Panel · không truyền hộ</span></div><div class="stack-row"><span class="stack-key">03</span><span class="stack-item '+(step>=3?'good':'')+'">ProfileCard · useContext(UserContext)</span></div></div></div></div>';
+      }
+      if (id==='fiber') {
+        return '<div class="timeline"><div class="timeline-row"><div class="timeline-label">Stack</div><div class="timeline-track"><span class="work-block '+(step>=0?'on':'')+'">A</span><span class="work-block '+(step>=0?'on':'')+'">B</span><span class="work-block '+(step>=0?'on':'')+'">C</span><span class="work-block '+(step>=0?'on':'')+'">D · block</span></div></div><div class="timeline-row"><div class="timeline-label">Fiber</div><div class="timeline-track"><span class="work-block '+(step>=2?'on':'')+'">A</span><span class="work-block '+(step>=2?'on':'')+'">B</span><span class="work-block pause">pause</span><span class="work-block '+(step>=2?'on':'')+'">C</span><span class="work-block '+(step>=2?'on':'')+'">D</span></div></div><div class="timeline-row"><div class="timeline-label">Main thread</div><div class="timeline-track"><span class="work-block">render</span><span class="work-block '+(step>=3?'event':'')+'">click</span><span class="work-block">resume</span></div></div></div>';
+      }
+      const generic={
+        oneWay:[['Child','button click'],['↑','onIncrease()'],['Parent','setCount'],['↓','props mới']],
+        jsx:[['JSX','<h1>Hello</h1>'],['Babel','transform'],['Object','type + props']],
+        hooks:[['Class','componentDidMount'],['Hook','useEffect'],['Class','componentWillUnmount'],['Hook','cleanup']],
+        redux:[['UI','dispatch'],['Action',values.action||'addItem(product)'],['Reducer','cartSlice'],['Store','state mới'],['UI','useSelector']],
+        requestReducer:[['dispatch','FETCH_START'],['reducer','loading = true'],['fetch',values.requestAction||'FETCH_SUCCESS'],['state','object hợp lệ'],['UI',values.requestAction==='FETCH_ERROR'?'Lỗi':'data.name']],
+        effectCycle:[['Render','component'],['Effect','side effect'],['Deps','thay đổi'],['Cleanup','effect cũ'],['Effect','giá trị mới']],
+        fetchCleanup:[['fetch','/users/1'],['userId','1 → '+(values.userId||'2')],['cleanup','cancelled=true'],['fetch','/users/'+(values.userId||'2')],['UI','response mới']],
+        staleClosure:[['Mount','count=0'],['Closure','giữ count=0'],['Tick 1','setCount(1)'],['Tick 2…','vẫn setCount(1)']],
+        memo:[['Render','ProductList'],['Deps','products + keyword'],[values.memoCase==='keyword đổi'?'Miss':'Hit',values.memoCase==='keyword đổi'?'filter lại':'dùng cache'],['UI','filtered.map']],
+        callbackMemo:[['Parent','count đổi'],['useCallback','cùng reference'],['React.memo','props không đổi'],['Child','skip render']]
+      }[id]||[];
+      return '<div class="scene-pipeline">'+generic.map((item,index)=>dataCard(item[0],item[0],item[1],index===step)+(index<generic.length-1?'<div class="scene-arrow '+(index<step?'hot':'')+'">→</div>':'')).join('')+'</div>';
+    }
+
+    function setupFlows() {
+      document.querySelectorAll('.flow').forEach(root=>{
+        const def=FLOW_DEFS[root.dataset.flow]; let step=0;
+        const values=()=>Object.fromEntries([...root.querySelectorAll('[data-field]')].map(el=>[el.dataset.field,el.value]));
+        const steps=()=>def.build?def.build(values()):def.steps;
+        const paint=()=>{
+          const list=steps(); step=Math.min(step,list.length-1);
+          root.querySelector('.flow-counter').textContent=(step+1)+' / '+list.length;
+          root.querySelector('.flow-scene').innerHTML=sceneHtml(root.dataset.flow,step,values());
+          root.querySelector('.flow-path').innerHTML=list.map((item,i)=>'<div class="flow-node '+(i<=step?'active ':'')+(i===step?'current':'')+'"><div class="node-title">'+escapeHtml(item.name)+'</div><div class="node-detail">'+escapeHtml(item.detail)+'</div></div>').join('');
+          root.querySelector('.flow-explain').textContent=list[step].text;
+          root.querySelector('.step-dots').innerHTML=list.map((_,i)=>'<button type="button" class="step-dot '+(i===step?'active':'')+'" data-step="'+i+'" aria-label="Bước '+(i+1)+'"></button>').join('');
+          root.querySelector('.run-btn').textContent=step===list.length-1?'Chạy lại ↻':'Bước tiếp →';
+        };
+        root.addEventListener('click',event=>{
+          if(event.target.matches('.run-btn')) { const list=steps(); step=step===list.length-1?0:step+1; paint(); }
+          if(event.target.matches('.step-dot')) { step=Number(event.target.dataset.step); paint(); }
+          if(event.target.matches('.dom-child')) {
+            root.querySelectorAll('.dom-child').forEach(node=>node.classList.remove('selected')); event.target.classList.add('selected');
+            const state=event.target.classList.contains('add')?'node mới':event.target.classList.contains('change')?'cập nhật lại':event.target.classList.contains('remove')?'loại bỏ':'giữ nguyên';
+            root.querySelector('.flow-explain').textContent='Node '+event.target.dataset.domNode+' · '+state+'.';
+          }
+        });
+        root.querySelectorAll('[data-field]').forEach(el=>el.addEventListener('input',()=>{step=0;paint();})); paint();
+      });
+    }
+
+    function shortTitle(title) { return title.replace(/^\d+\.\s*/,''); }
+    function renderSidebar() {
+      document.getElementById('chapterList').innerHTML=chapters.map((chapter,index)=>'<li><button class="chapter-link '+(index===current?'active ':'')+(completed.has(index)?'done':'')+'" data-index="'+index+'"><span class="chapter-no">'+String(index+1).padStart(2,'0')+'</span><span class="chapter-name">'+escapeHtml(shortTitle(chapter.title))+'</span><span class="check">✓</span></button></li>').join('');
+    }
+    function navButton(index,direction) {
+      if(index<0||index>=chapters.length) return '<div class="nav-spacer"></div>';
+      return '<button class="nav-btn '+(direction==='next'?'next':'')+'" data-index="'+index+'"><span class="nav-dir">'+(direction==='next'?'Chương tiếp theo →':'← Chương trước')+'</span><span class="nav-title">'+escapeHtml(shortTitle(chapters[index].title))+'</span></button>';
+    }
+    function goTo(index,updateHash=true) {
+      current=Math.max(0,Math.min(index,chapters.length-1)); const chapter=chapters[current];
+      document.getElementById('content').innerHTML=renderMarkdown(chapter);
+      document.getElementById('chapterKicker').textContent='Chương '+(current+1).toString().padStart(2,'0');
+      document.getElementById('chapterCount').textContent='Chương '+(current+1)+' / '+chapters.length;
+      document.getElementById('currentTitle').textContent=chapter.title;
+      document.getElementById('chapterNav').innerHTML=navButton(current-1,'prev')+navButton(current+1,'next');
+      document.title=chapter.title+' — React Explorer'; renderSidebar(); setupFlows(); setupCopy();
+      if(updateHash) history.pushState(null,'','#'+chapter.slug);
+      document.body.classList.remove('menu-open'); window.scrollTo({top:0,behavior:'instant'}); updateProgress();
+    }
+    function setupCopy() {
+      document.querySelectorAll('.copy-btn').forEach(button=>button.addEventListener('click',async()=>{
+        await navigator.clipboard.writeText(button.closest('.code-wrap').querySelector('code').textContent); button.textContent='Đã chép ✓'; setTimeout(()=>button.textContent='Sao chép',1400);
+      }));
+    }
+    function updateProgress() {
+      const doc=document.documentElement; const max=doc.scrollHeight-innerHeight; const ratio=max>0?scrollY/max:1;
+      document.getElementById('progressBar').style.width=(ratio*100)+'%';
+      if(ratio>.96 && !completed.has(current)) { completed.add(current); localStorage.setItem('react-explorer-completed',JSON.stringify([...completed])); renderSidebar(); }
+    }
+    function indexFromHash() { const hash=location.hash.slice(1); const found=chapters.findIndex(ch=>ch.slug===hash || hash==='chuong-'+(ch.index+1)); return found<0?0:found; }
+    document.addEventListener('click',event=>{ const target=event.target.closest('[data-index]'); if(target) goTo(Number(target.dataset.index)); });
+    document.getElementById('menuBtn').addEventListener('click',()=>document.body.classList.toggle('menu-open'));
+    document.getElementById('scrim').addEventListener('click',()=>document.body.classList.remove('menu-open'));
+    document.getElementById('themeBtn').addEventListener('click',()=>{ const next=document.documentElement.dataset.theme==='light'?'dark':'light'; document.documentElement.dataset.theme=next; localStorage.setItem('react-explorer-theme',next); });
+    addEventListener('scroll',updateProgress,{passive:true});
+    addEventListener('popstate',()=>goTo(indexFromHash(),false));
+    addEventListener('keydown',event=>{ if(/INPUT|SELECT|TEXTAREA/.test(event.target.tagName))return; if(event.key==='ArrowRight'&&current<chapters.length-1)goTo(current+1); if(event.key==='ArrowLeft'&&current>0)goTo(current-1); });
+    const savedTheme=localStorage.getItem('react-explorer-theme'); if(savedTheme)document.documentElement.dataset.theme=savedTheme;
+    document.getElementById('sourceMeta').innerHTML='Nguồn nguyên văn<br>'+SOURCE.length.toLocaleString('vi-VN')+' ký tự · '+chapters.length+' chương';
+    console.info('[React Explorer] Source integrity:', {characters:SOURCE.length,chapters:chapters.map(ch=>({title:ch.title,characters:ch.raw.length}))});
+    goTo(indexFromHash(),false);
+  </script>
+</body>
+</html>`;
+
+fs.writeFileSync(outputPath, html, 'utf8');
+
+const headings = [...markdown.matchAll(/^## (.+)$/gm)].map(match => match[1]);
+if (headings.length !== 8) throw new Error(`Expected 8 chapters, received ${headings.length}`);
+if (!html.includes(encodedSource)) throw new Error('Source embedding integrity check failed');
+console.log(`Built ${outputPath}: ${markdown.length} source characters, ${headings.length} chapters, ${html.length} HTML characters.`);
