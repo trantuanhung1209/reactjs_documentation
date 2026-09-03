@@ -50,6 +50,11 @@
     .chapter-name { font-size: 12px; line-height: 1.45; font-weight: 590; }
     .check { color: var(--good); font-size: 13px; opacity: 0; }
     .chapter-link.done .check { opacity: 1; }
+    .section-list { margin: 0; padding: 0 0 4px 33px; list-style: none; }
+    .section-link { display: block; width: 100%; padding: 4px 8px; border: 0; border-radius: 6px; color: var(--faint); background: transparent; font-size: 11px; line-height: 1.4; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .section-link:hover { color: var(--text); background: var(--surface-2); }
+    .section-link.sec-active { color: var(--accent); font-weight: 600; }
+    .section-link.sec-h4 { padding-left: 18px; font-size: 10.5px; color: color-mix(in srgb,var(--faint) 70%,transparent); }
     .source-meta { margin: 14px 7px 0; padding: 12px; border-top: 1px solid var(--line); color: var(--faint); font: 10px/1.6 ui-monospace,SFMono-Regular,monospace; }
     .main { margin-left: var(--sidebar); padding: 112px 26px 70px; }
     .reader { width: min(100%, 790px); margin: 0 auto; }
@@ -529,8 +534,57 @@
     }
 
     function shortTitle(title) { return title.replace(/^\d+\.\s*/,''); }
+
+    function extractSections(raw) {
+      const lines = raw.split('\n');
+      const sections = [];
+      for (const line of lines) {
+        const m3 = line.match(/^### (.+)$/);
+        if (m3) { sections.push({ level: 3, title: m3[1] }); continue; }
+        const m4 = line.match(/^#### (.+)$/);
+        if (m4) { sections.push({ level: 4, title: m4[1] }); }
+      }
+      return sections;
+    }
+
+    function headingId(title) {
+      return slugify(title.replace(/[`*_]/g,''));
+    }
+
     function renderSidebar() {
-      document.getElementById('chapterList').innerHTML=chapters.map((chapter,index)=>'<li><button class="chapter-link '+(index===current?'active ':'')+(completed.has(index)?'done':'')+'" data-index="'+index+'"><span class="chapter-no">'+String(index+1).padStart(2,'0')+'</span><span class="chapter-name">'+escapeHtml(shortTitle(chapter.title))+'</span><span class="check">✓</span></button></li>').join('');
+      const sections = extractSections(chapters[current].raw);
+      document.getElementById('chapterList').innerHTML = chapters.map((chapter, index) => {
+        const isActive = index === current;
+        const sectionHtml = isActive && sections.length ? '<ul class="section-list">' + sections.map(s => '<li><button class="section-link' + (s.level === 4 ? ' sec-h4' : '') + '" data-heading="' + escapeHtml(headingId(s.title)) + '">' + escapeHtml(shortTitle(s.title)) + '</button></li>').join('') + '</ul>' : '';
+        return '<li><button class="chapter-link ' + (isActive ? 'active ' : '') + (completed.has(index) ? 'done' : '') + '" data-index="' + index + '"><span class="chapter-no">' + String(index + 1).padStart(2, '0') + '</span><span class="chapter-name">' + escapeHtml(shortTitle(chapter.title)) + '</span><span class="check">✓</span></button>' + sectionHtml + '</li>';
+      }).join('');
+      setupScrollSpy();
+    }
+
+    function setupScrollSpy() {
+      const links = document.querySelectorAll('.section-link[data-heading]');
+      if (!links.length) return;
+      const headings = [];
+      links.forEach(btn => {
+        const id = btn.dataset.heading;
+        const el = document.getElementById(id);
+        if (el) headings.push({ el, btn });
+      });
+      function updateActive() {
+        let active = null;
+        for (const { el } of headings) {
+          if (el.getBoundingClientRect().top <= 120) active = el;
+        }
+        links.forEach(btn => btn.classList.remove('sec-active'));
+        if (active) {
+          const match = [...links].find(btn => btn.dataset.heading === active.id);
+          if (match) match.classList.add('sec-active');
+        }
+      }
+      window.removeEventListener('scroll', window._scrollSpy);
+      window._scrollSpy = updateActive;
+      window.addEventListener('scroll', updateActive, { passive: true });
+      updateActive();
     }
     function navButton(index,direction) {
       if(index<0||index>=chapters.length) return '<div class="nav-spacer"></div>';
@@ -558,7 +612,16 @@
       if(ratio>.96 && !completed.has(current)) { completed.add(current); localStorage.setItem('react-explorer-completed',JSON.stringify([...completed])); renderSidebar(); }
     }
     function indexFromHash() { const hash=location.hash.slice(1); const found=chapters.findIndex(ch=>ch.slug===hash || hash==='chuong-'+(ch.index+1)); return found<0?0:found; }
-    document.addEventListener('click',event=>{ const target=event.target.closest('[data-index]'); if(target) goTo(Number(target.dataset.index)); });
+    document.addEventListener('click', event => {
+      const secBtn = event.target.closest('.section-link[data-heading]');
+      if (secBtn) {
+        const el = document.getElementById(secBtn.dataset.heading);
+        if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        return;
+      }
+      const target = event.target.closest('[data-index]');
+      if (target) goTo(Number(target.dataset.index));
+    });
     document.getElementById('menuBtn').addEventListener('click',()=>document.body.classList.toggle('menu-open'));
     document.getElementById('scrim').addEventListener('click',()=>document.body.classList.remove('menu-open'));
     document.getElementById('themeBtn').addEventListener('click',()=>{ const next=document.documentElement.dataset.theme==='light'?'dark':'light'; document.documentElement.dataset.theme=next; localStorage.setItem('react-explorer-theme',next); });
