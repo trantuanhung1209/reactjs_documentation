@@ -78,6 +78,11 @@
     .content hr { margin: 48px 0; height: 1px; border: 0; background: var(--line); }
     .content :not(pre) > code { padding: .16em .42em; border: 1px solid var(--line); border-radius: 5px; color: color-mix(in srgb,var(--accent) 85%,var(--text)); background: var(--surface-2); font: .88em/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
     .code-wrap { position: relative; margin: 24px 0 28px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--code); box-shadow: var(--shadow); }
+    .diagram-card { margin: 28px 0 32px; border: 1px solid color-mix(in srgb,var(--accent) 28%,var(--line)); border-radius: 14px; overflow: hidden; background: color-mix(in srgb,var(--accent) 4%,var(--surface)); }
+    .diagram-label { padding: 8px 14px; background: color-mix(in srgb,var(--accent) 10%,var(--surface-2)); border-bottom: 1px solid color-mix(in srgb,var(--accent) 20%,var(--line)); color: var(--accent); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .15em; text-transform: uppercase; display: flex; align-items: center; gap: 7px; }
+    .diagram-label::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); opacity: .7; }
+    .diagram-body { padding: 20px 22px; overflow-x: auto; }
+    .diagram-body pre { margin: 0; padding: 0; background: transparent; color: var(--text); font: 13px/1.75 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; white-space: pre; }
     .code-head { height: 38px; padding: 0 12px 0 15px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #252b34; color: #7e8998; font: 10px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .09em; text-transform: uppercase; }
     .code-head::before { content: "●  ●  ●"; color: #586170; letter-spacing: 3px; }
     .copy-btn { padding: 5px 8px; border: 0; color: #8d98a8; background: transparent; font: 10px/1 ui-monospace,SFMono-Regular,monospace; cursor: pointer; }
@@ -296,7 +301,13 @@
       if (token.type === 'paragraph') return '<p>' + inline(token.raw) + '</p>';
       if (token.type === 'quote') return '<blockquote><p>' + inline(token.raw) + '</p></blockquote>';
       if (token.type === 'hr') return '<hr>';
-      if (token.type === 'code') return '<div class="code-wrap"><div class="code-head"><span>' + escapeHtml(token.lang) + '</span><button class="copy-btn" type="button">Sao chép</button></div><pre><code>' + escapeHtml(token.raw) + '</code></pre></div>';
+      if (token.type === 'code') {
+        const isDiagram = !token.lang && /[┌┐└┘│├┤┼─┬┴]/.test(token.raw);
+        if (isDiagram) {
+          return '<div class="diagram-card"><div class="diagram-label">Sơ đồ</div><div class="diagram-body"><pre>' + escapeHtml(token.raw) + '</pre></div></div>';
+        }
+        return '<div class="code-wrap"><div class="code-head"><span>' + escapeHtml(token.lang) + '</span><button class="copy-btn" type="button">Sao chép</button></div><pre><code>' + escapeHtml(token.raw) + '</code></pre></div>';
+      }
       if (token.type === 'list') { const tag=token.ordered?'ol':'ul'; return '<'+tag+'>'+token.items.map(item=>'<li>'+inline(item)+'</li>').join('')+'</'+tag+'>'; }
       if (token.type === 'table') { const [head,...rows]=token.rows; return '<div class="table-scroll"><table><thead><tr>'+head.map(cell=>'<th>'+inline(cell)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(cell=>'<td>'+inline(cell)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'; }
       return '';
