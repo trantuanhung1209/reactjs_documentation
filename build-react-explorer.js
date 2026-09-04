@@ -4,6 +4,7 @@ const { marked } = await import('marked');
 
 const sourcePath = 'React-base-nang-cao.md';
 const outputPath = 'index.html';
+const deployOutputPath = 'public/index.html';
 const markdown = fs.readFileSync(sourcePath, 'utf8');
 const encodedSource = Buffer.from(markdown, 'utf8').toString('base64');
 const sourceAst = marked.lexer(markdown, { gfm: true });
@@ -1099,6 +1100,8 @@ const html = String.raw`<!doctype html>
 </html>`;
 
 fs.writeFileSync(outputPath, html, 'utf8');
+fs.mkdirSync('public', { recursive: true });
+fs.writeFileSync(deployOutputPath, html, 'utf8');
 
 const headings = sourceAst.filter(token => token.type === 'heading' && token.depth === 2);
 const contentIds = [...markdown.matchAll(/^<!--\s*content-id:\s*([a-z0-9-]+)\s*-->\s*$/gim)].map(match => match[1]);

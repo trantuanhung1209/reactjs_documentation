@@ -3,6 +3,8 @@ const fs = require('node:fs');
 
 const markdown = fs.readFileSync('React-base-nang-cao.md', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
+const deployHtml = fs.readFileSync('public/index.html', 'utf8');
+assert.equal(deployHtml, html, 'Vercel output must match the verified root HTML');
 
 const chapters = [...markdown.matchAll(/^## (.+)$/gm)];
 const ids = [...markdown.matchAll(/^<!--\s*content-id:\s*([a-z0-9-]+)\s*-->\s*$/gim)].map(match => match[1]);
