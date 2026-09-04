@@ -258,7 +258,8 @@
         const end = matches[index + 1]?.index ?? source.length;
         const raw = source.slice(start, end).trim();
         const prefix = source.slice(Math.max(0, start - 100), start);
-        const contentId = prefix.match(/<!--\s*content-id:\s*([a-z0-9-]+)\s*-->\s*$/i)?.[1];
+        const contentIdMatch = prefix.match(new RegExp('<' + '!--\\s*content-id:\\s*([a-z0-9-]+)\\s*--' + '>\\s*$', 'i'));
+        const contentId = contentIdMatch ? contentIdMatch[1] : undefined;
         if (!contentId) throw new Error('Missing stable content-id before chapter: ' + match[1]);
         const rendered = CHAPTER_RENDER.find(chapter => chapter.id === contentId);
         if (!rendered) throw new Error('Missing rendered chapter AST for: ' + contentId);
@@ -555,7 +556,8 @@
     }
     function searchText(raw) {
       const fence = String.fromCharCode(96);
-      return raw.replace(/<!--[^]*?-->/g,'').replace(new RegExp(fence+'{3}[^\\n]*','g'),'').replace(/[_*>#|\[\]()]/g,' ').replace(/\s+/g,' ').trim();
+      const htmlComment = new RegExp('<' + '!--[^]*?--' + '>', 'g');
+      return raw.replace(htmlComment,'').replace(new RegExp(fence+'{3}[^\\n]*','g'),'').replace(/[_*>#|\[\]()]/g,' ').replace(/\s+/g,' ').trim();
     }
     const searchIndex=chapters.flatMap(chapter=>{
       const text=searchText(chapter.raw);
