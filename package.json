@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "node build-react-explorer.js",
+    "verify": "node verify-react-explorer.js",
+    "test": "npm run build && npm run verify"
+  },
+  "devDependencies": {
+    "marked": "^18.0.11"
+  }
+}

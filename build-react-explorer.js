@@ -1,9 +1,65 @@
+async function build() {
 const fs = require('fs');
+const { marked } = await import('marked');
 
 const sourcePath = 'React-base-nang-cao.md';
-const outputPath = 'react-explorer.html';
+const outputPath = 'index.html';
 const markdown = fs.readFileSync(sourcePath, 'utf8');
 const encodedSource = Buffer.from(markdown, 'utf8').toString('base64');
+const sourceAst = marked.lexer(markdown, { gfm: true });
+
+const flowBindings = {
+  snapshot:'Hãy đọc handler như một “bức ảnh chụp”', xssLab:'Demo bên dưới dùng payload vô hại', repaint:'render lại cả 1000 tin nhắn cũ + 1 tin mới', oneWay:'function Child({ onIncrease })', jsx:"children: 'Hello'", reconciliation:'messages.map(msg => <div key={msg.id}', keys:'key={item.id} data={item}', fiber:'Concurrent Rendering', hooks:'đơn vị tính năng', redux:'dispatch(removeItem(item.id))', batching:'count tăng đúng 3, vì mỗi lần React đưa', requestReducer:'return <div>{state.data.name}</div>;', effectCycle:'}, [dependencies]);', fetchCleanup:'return user ? <div>{user.name}</div>', staleClosure:'snapshot lúc mount', memo:'}, [products, keyword]);', callbackMemo:'ExpensiveChild render', contextFlow:'const user = useContext(UserContext)', requestRace:'Checklist cho một resource', transition:'urgent: input phản hồi ngay', liveReact:'React lab — phòng lab cô lập'
+};
+
+const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+const slug = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+const markdownHeadings = raw => {
+  let pendingId = '';
+  return raw.replace(/\r/g,'').split('\n').flatMap(line => {
+    const id = line.match(/^<!--\s*content-id:\s*([a-z0-9-]+)\s*-->\s*$/i);
+    if (id) { pendingId = id[1]; return []; }
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (!heading) return [];
+    const value = { depth:heading[1].length, text:heading[2], id:pendingId || slug(heading[2]) };
+    pendingId = '';
+    return [value];
+  });
+};
+const chapterMatches = [...markdown.matchAll(/^## (.+)$/gm)];
+const preface = markdown.slice(0, chapterMatches[0].index).trim();
+const renderedChapters = chapterMatches.map((match, index) => {
+  const start = match.index;
+  const end = chapterMatches[index + 1]?.index ?? markdown.length;
+  const raw = (index === 0 ? preface + '\n\n' : '') + markdown.slice(start, end).trim();
+  const chapterId = markdown.slice(Math.max(0, start - 100), start).match(/<!--\s*content-id:\s*([a-z0-9-]+)\s*-->\s*$/i)?.[1];
+  if (!chapterId) throw new Error('Missing stable content-id before chapter: ' + match[1]);
+  const headings = markdownHeadings(raw);
+  const renderHeadings = [...headings];
+  const renderer = new marked.Renderer();
+  renderer.heading = function({ tokens, depth }) {
+      const heading = renderHeadings.shift();
+      return '<h' + depth + ' id="' + escape(heading?.id || '') + '">' + this.parser.parseInline(tokens) + '</h' + depth + '>';
+    };
+  renderer.code = function({ text, lang }) {
+      return '<div class="code-wrap"><div class="code-head"><span>' + escape(lang || 'code') + '</span><button class="copy-btn" type="button">Sao chép</button></div><pre><code>' + escape(text) + '</code></pre></div>\n';
+    };
+  renderer.link = function({ href, tokens }) {
+      const safe = /^(https?:\/\/|\/|#)/i.test(href || '') ? href : '#';
+      return '<a href="' + escape(safe) + '" target="_blank" rel="noreferrer">' + this.parser.parseInline(tokens) + '</a>';
+    };
+  const tokens = marked.lexer(raw.replace(/<!--\s*content-id:\s*[a-z0-9-]+\s*-->\s*\r?\n?/gi, ''), { gfm:true });
+  const inserted = new Set();
+  let html = '';
+  for (const token of tokens) {
+    html += marked.parser([token], { gfm:true, renderer });
+    for (const [flow, anchor] of Object.entries(flowBindings)) {
+      if (!inserted.has(flow) && token.raw.includes(anchor)) { html += '<!--FLOW:' + flow + '-->'; inserted.add(flow); }
+    }
+  }
+  return { id:chapterId, html, sections:headings.filter(heading => heading.depth === 3 || heading.depth === 4).map(heading => ({ level:heading.depth, title:heading.text, id:heading.id })) };
+});
+const encodedChapterRender = Buffer.from(JSON.stringify(renderedChapters), 'utf8').toString('base64');
 
 const html = String.raw`<!doctype html>
 <html lang="vi">
@@ -38,6 +94,18 @@ const html = String.raw`<!doctype html>
     .eyebrow { color: var(--accent); font: 700 10px/1.2 ui-monospace,SFMono-Regular,monospace; letter-spacing: .15em; text-transform: uppercase; }
     .current-title { margin-top: 4px; max-width: 56vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--muted); }
     .top-actions { display: flex; align-items: center; gap: 8px; }
+    .search-wrap { position: relative; flex: 1 1 280px; max-width: 390px; }
+    .search-input { width: 100%; min-height: 36px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 10px; color: var(--text); background: var(--surface); outline: 0; font-size: 12px; }
+    .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 14%,transparent); }
+    .search-results { position: absolute; z-index: 90; top: calc(100% + 8px); left: 0; width: min(620px,calc(100vw - 32px)); max-height: min(62vh,510px); overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
+    .search-results[hidden] { display: none; }
+    .search-result { display: block; width: 100%; padding: 10px; border: 0; border-radius: 8px; color: var(--text); background: transparent; text-align: left; cursor: pointer; }
+    .search-result:hover, .search-result:focus-visible { background: var(--surface-2); outline: 0; }
+    .search-result small, .search-result span { display: block; }
+    .search-result small { color: var(--accent); font: 700 10px/1.4 ui-monospace,SFMono-Regular,monospace; }
+    .search-result span { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .search-empty { padding: 13px; color: var(--muted); font-size: 12px; }
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
     .chapter-count { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; white-space: nowrap; }
     .icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: grid; place-items: center; }
     .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
@@ -57,6 +125,10 @@ const html = String.raw`<!doctype html>
     .chapter-name { font-size: 12px; line-height: 1.45; font-weight: 590; }
     .check { color: var(--good); font-size: 13px; opacity: 0; }
     .chapter-link.done .check { opacity: 1; }
+    .section-list { margin: -2px 0 5px 39px; padding: 0; list-style: none; }
+    .section-link { display: block; width: 100%; padding: 5px 8px; border: 0; border-left: 1px solid var(--line); color: var(--faint); background: transparent; text-align: left; font-size: 11px; line-height: 1.35; cursor: pointer; }
+    .section-link:hover, .section-link:focus-visible { color: var(--accent); border-left-color: var(--accent); outline: 0; }
+    .section-link.sec-h4 { padding-left: 16px; font-size: 10px; }
     .source-meta { margin: 14px 7px 0; padding: 12px; border-top: 1px solid var(--line); color: var(--faint); font: 10px/1.6 ui-monospace,SFMono-Regular,monospace; }
     .main { margin-left: var(--sidebar); padding: 112px 26px 70px; }
     .reader { width: min(100%, 790px); margin: 0 auto; }
@@ -92,10 +164,12 @@ const html = String.raw`<!doctype html>
     td { color: var(--muted); }
     .table-scroll { overflow-x: auto; margin: 24px 0; }
     .table-scroll table { margin: 0; min-width: 620px; }
+    @media (max-width: 620px) { .content table { display: block; overflow-x: auto; white-space: nowrap; } }
     .flow { margin: 32px -24px 38px; padding: 25px; border: 1px solid color-mix(in srgb,var(--accent) 35%,var(--line)); border-radius: 18px; background: radial-gradient(circle at 100% 0,color-mix(in srgb,var(--accent-2) 10%,transparent),transparent 40%),var(--surface); box-shadow: var(--shadow); }
     .flow-top { display: flex; align-items: start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
     .flow-label { margin-bottom: 6px; color: var(--accent); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .16em; text-transform: uppercase; }
     .flow h4 { margin: 0; font-size: 18px; letter-spacing: -.015em; }
+    .flow-note { max-width: 530px; margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
     .flow-counter { flex: 0 0 auto; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font: 11px/1 ui-monospace,SFMono-Regular,monospace; }
     .flow-inputs { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: -3px 0 18px; }
     .field { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
@@ -170,6 +244,7 @@ const html = String.raw`<!doctype html>
     .xss-label { margin-bottom: 10px; color: var(--muted); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .12em; text-transform: uppercase; }
     .xss-output { min-height: 83px; padding: 11px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); background: var(--surface-2); font: 11px/1.55 ui-monospace,SFMono-Regular,monospace; overflow-wrap: anywhere; }
     .xss-frame { width: 100%; height: 83px; border: 1px dashed var(--line); border-radius: 8px; background: #fff; }
+    .react-lab-frame { width: 100%; height: 490px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
     .xss-proof { margin-top: 10px; padding: 9px 10px; border-radius: 7px; color: var(--muted); background: var(--surface-2); font-size: 11px; line-height: 1.45; }
     .xss-proof.danger { color: #ff8b95; background: color-mix(in srgb,#ff6675 10%,var(--surface-2)); }
     .xss-proof.safe { color: var(--good); background: color-mix(in srgb,var(--good) 10%,var(--surface-2)); }
@@ -191,11 +266,13 @@ const html = String.raw`<!doctype html>
       .menu-btn { display: grid; }
       .topbar { left: 0; padding: 0 16px; }
       .topbar-title { display: none; }
+      .search-wrap { max-width: none; }
       .main { margin-left: 0; padding: 98px 20px 55px; }
     }
     @media (max-width: 620px) {
       .main { padding-inline: 16px; }
-      .chapter-count { font-size: 11px; }
+      .chapter-count { display: none; }
+      .search-wrap { flex-basis: 0; }
       .content h2 { margin-bottom: 28px; }
       .content h3 { margin-top: 46px; }
       .content p, .content li { font-size: 15px; line-height: 1.78; }
@@ -224,23 +301,18 @@ const html = String.raw`<!doctype html>
   </aside>
   <div class="scrim" id="scrim"></div>
   <header class="topbar">
-    <div class="top-actions"><button class="icon-btn menu-btn" id="menuBtn" aria-label="Mở danh sách chương">☰</button><div class="topbar-title"><div class="eyebrow">React Explorer</div><div class="current-title" id="currentTitle"></div></div></div>
-    <div class="top-actions"><span class="chapter-count" id="chapterCount"></span><button class="icon-btn" id="themeBtn" aria-label="Đổi giao diện sáng tối">◐</button></div>
+    <div class="top-actions"><button class="icon-btn menu-btn" id="menuBtn" aria-label="Mở danh sách chương" aria-expanded="false" aria-controls="sidebar">☰</button><div class="topbar-title"><div class="eyebrow">React Explorer</div><div class="current-title" id="currentTitle"></div></div></div>
+    <div class="search-wrap"><label class="sr-only" for="globalSearch">Tìm trong toàn bộ tài liệu</label><input class="search-input" id="globalSearch" type="search" autocomplete="off" placeholder="Tìm trong tài liệu…"><div class="search-results" id="searchResults" role="listbox" hidden></div></div><div class="top-actions"><span class="chapter-count" id="chapterCount"></span><button class="icon-btn" id="themeBtn" aria-label="Đổi giao diện sáng tối" aria-pressed="false">◐</button></div>
   </header>
   <main class="main"><div class="reader"><div class="chapter-kicker" id="chapterKicker"></div><article class="content" id="content"></article><nav class="chapter-nav" id="chapterNav"></nav></div></main>
   <script>
     const SOURCE_B64 = '${encodedSource}';
     const SOURCE = new TextDecoder().decode(Uint8Array.from(atob(SOURCE_B64), c => c.charCodeAt(0)));
+    const CHAPTER_RENDER_B64 = '${encodedChapterRender}';
+    const CHAPTER_RENDER = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(CHAPTER_RENDER_B64), c => c.charCodeAt(0))));
 
     const escapeHtml = value => value.replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     const slugify = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
-    const inline = source => {
-      const codes = [];
-      let text = escapeHtml(source).replace(/\x60([^\x60]+)\x60/g, (_, code) => { codes.push('<code>' + code + '</code>'); return '@@CODE' + (codes.length - 1) + '@@'; });
-      text = text.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/(?<!\*)\*([^*]+)\*(?!\*)/g,'<em>$1</em>').replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noreferrer">$1</a>');
-      return text.replace(/@@CODE(\d+)@@/g, (_, index) => codes[Number(index)]);
-    };
-
     function splitSource(source) {
       const matches = [...source.matchAll(/^## (.+)$/gm)];
       const preface = source.slice(0, matches[0].index).trim();
@@ -248,63 +320,22 @@ const html = String.raw`<!doctype html>
         const start = match.index;
         const end = matches[index + 1]?.index ?? source.length;
         const raw = source.slice(start, end).trim();
-        return { index, title: match[1], slug: 'chuong-' + (index + 1) + '-' + slugify(match[1]), raw: index === 0 ? preface + '\n\n' + raw : raw };
+        const prefix = source.slice(Math.max(0, start - 100), start);
+        const contentId = prefix.match(/<!--\s*content-id:\s*([a-z0-9-]+)\s*-->\s*$/i)?.[1];
+        if (!contentId) throw new Error('Missing stable content-id before chapter: ' + match[1]);
+        const rendered = CHAPTER_RENDER.find(chapter => chapter.id === contentId);
+        if (!rendered) throw new Error('Missing rendered chapter AST for: ' + contentId);
+        return { index, id: contentId, title: match[1], slug: contentId, raw: index === 0 ? preface + '\n\n' + raw : raw, html:rendered.html, sections:rendered.sections };
       });
     }
 
-    function blockTokens(markdown) {
-      const lines = markdown.replace(/\r/g,'').split('\n');
-      const tokens = [];
-      let i = 0;
-      const isSpecial = line => /^(#{1,6})\s+/.test(line) || /^\x60\x60\x60/.test(line) || /^>\s?/.test(line) || /^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line) || /^\s*([-+*]|\d+\.)\s+/.test(line);
-      while (i < lines.length) {
-        const line = lines[i];
-        if (!line.trim()) { i++; continue; }
-        if (/^\x60\x60\x60/.test(line)) {
-          const lang = line.slice(3).trim() || 'code'; const code = []; i++;
-          while (i < lines.length && !/^\x60\x60\x60/.test(lines[i])) code.push(lines[i++]);
-          if (i < lines.length) i++;
-          tokens.push({ type:'code', lang, raw:code.join('\n') }); continue;
-        }
-        const heading = line.match(/^(#{1,6})\s+(.+)$/);
-        if (heading) { tokens.push({ type:'heading', level:heading[1].length, raw:heading[2] }); i++; continue; }
-        if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)) { tokens.push({type:'hr',raw:''}); i++; continue; }
-        if (/^>\s?/.test(line)) {
-          const quote=[]; while (i < lines.length && (/^>\s?/.test(lines[i]) || !lines[i].trim())) { quote.push(lines[i].replace(/^>\s?/,'')); i++; }
-          tokens.push({type:'quote',raw:quote.join(' ').trim()}); continue;
-        }
-        if (line.includes('|') && i + 1 < lines.length && /^\s*\|?\s*:?-+/.test(lines[i+1])) {
-          const rows=[line]; i += 2; while(i < lines.length && lines[i].includes('|') && lines[i].trim()) rows.push(lines[i++]);
-          tokens.push({type:'table',raw:rows.join('\n'),rows:rows.map(row => row.trim().replace(/^\||\|$/g,'').split('|').map(cell=>cell.trim()))}); continue;
-        }
-        const listMatch = line.match(/^\s*([-+*]|\d+\.)\s+(.+)$/);
-        if (listMatch) {
-          const ordered=/\d+\./.test(listMatch[1]); const items=[];
-          while(i < lines.length) {
-            const match=lines[i].match(/^\s*([-+*]|\d+\.)\s+(.+)$/); if(!match || /\d+\./.test(match[1]) !== ordered) break;
-            let item=match[2]; i++; while(i < lines.length && lines[i].trim() && !isSpecial(lines[i]) && !(lines[i].includes('|') && i+1<lines.length && /^\s*\|?\s*:?-+/.test(lines[i+1]))) item += ' ' + lines[i++].trim(); items.push(item);
-          }
-          tokens.push({type:'list',ordered,items,raw:items.join('\n')}); continue;
-        }
-        const paragraph=[line.trim()]; i++;
-        while(i < lines.length && lines[i].trim() && !isSpecial(lines[i]) && !(lines[i].includes('|') && i+1<lines.length && /^\s*\|?\s*:?-+/.test(lines[i+1]))) paragraph.push(lines[i++].trim());
-        tokens.push({type:'paragraph',raw:paragraph.join(' ')});
-      }
-      return tokens;
-    }
-
-    function tokenHtml(token) {
-      if (token.type === 'heading') return '<h' + token.level + ' id="' + slugify(token.raw) + '">' + inline(token.raw) + '</h' + token.level + '>';
-      if (token.type === 'paragraph') return '<p>' + inline(token.raw) + '</p>';
-      if (token.type === 'quote') return '<blockquote><p>' + inline(token.raw) + '</p></blockquote>';
-      if (token.type === 'hr') return '<hr>';
-      if (token.type === 'code') return '<div class="code-wrap"><div class="code-head"><span>' + escapeHtml(token.lang) + '</span><button class="copy-btn" type="button">Sao chép</button></div><pre><code>' + escapeHtml(token.raw) + '</code></pre></div>';
-      if (token.type === 'list') { const tag=token.ordered?'ol':'ul'; return '<'+tag+'>'+token.items.map(item=>'<li>'+inline(item)+'</li>').join('')+'</'+tag+'>'; }
-      if (token.type === 'table') { const [head,...rows]=token.rows; return '<div class="table-scroll"><table><thead><tr>'+head.map(cell=>'<th>'+inline(cell)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(cell=>'<td>'+inline(cell)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'; }
-      return '';
-    }
-
     const FLOW_DEFS = {
+      snapshot: { title:'Snapshot: handler cũ không đổi giá trị của nó', anchor:'Hãy đọc handler như một “bức ảnh chụp”', steps:[
+        {name:'Render A',detail:'count = 0',text:'React gọi component và tạo handler đọc count bằng 0.'},
+        {name:'Click',detail:'setCount(1)',text:'Handler yêu cầu React cập nhật state; binding count trong handler này chưa đổi.'},
+        {name:'Render B',detail:'count = 1',text:'React gọi component lần mới với binding count mới.'},
+        {name:'Handler A',detail:'vẫn thấy 0',text:'Callback cũ vẫn là closure của render A. Đây là cơ chế, không tự nó là lỗi.'}
+      ]},
       xssLab: { title:'XSS: cùng một dữ liệu, hai cách render', anchor:'Demo bên dưới dùng payload vô hại', steps:[
         {name:'Input',detail:'name=<script>…',text:'Kẻ tấn công kiểm soát giá trị name trong request. Ở bước này nó vẫn chỉ là một chuỗi dữ liệu.'},
         {name:'Ghép chuỗi',detail:'HTML chứa payload',text:'Server nối dữ liệu vào template mà không encode, làm mất ranh giới giữa text và HTML/JavaScript.'},
@@ -314,8 +345,8 @@ const html = String.raw`<!doctype html>
       repaint: { title:'Vẽ lại toàn bộ vs chỉ vá phần đổi', anchor:'render lại cả 1000 tin nhắn cũ + 1 tin mới', fields:[{key:'size',label:'Số tin nhắn cũ',type:'number',value:'1000'}], build:v=>[
         {name:'Tin nhắn mới',detail:'+ 1 item',text:'Một tin nhắn mới được thêm vào danh sách.'},
         {name:'Ghi đè toàn bộ',detail:(v.size||1000)+' node cũ bị dựng lại',text:'Cách truyền thống ghi đè toàn bộ DOM dù chỉ có một phần tử đổi.'},
-        {name:'Tính phần khác biệt',detail:'VDOM mới ↔ VDOM cũ',text:'React so sánh hai cây trong bộ nhớ để tìm đúng phần khác biệt.'},
-        {name:'Vá đúng phần đổi',detail:'tạo 1 DOM node',text:'DOM thật chỉ nhận bản vá tối thiểu cho tin nhắn mới.'}
+        {name:'Đối chiếu UI',detail:'mô tả mới ↔ cũ',text:'React đối chiếu mô tả UI để quyết định cập nhật renderer.'},
+        {name:'Commit',detail:'thường chèn 1 node',text:'Với trường hợp đơn giản này commit thường chèn node mới; đây không phải benchmark hay cam kết cho mọi UI.'}
       ]},
       oneWay: { title:'One-way Data Flow', anchor:'function Child({ onIncrease })', steps:[
         {name:'Child',detail:'click “Tăng”',text:'Child phát sinh tương tác nhưng không tự sửa state.'},
@@ -329,10 +360,10 @@ const html = String.raw`<!doctype html>
         {name:'Object JS',detail:"type: 'h1' · props.children",text:'Kết quả là object JavaScript mô tả giao diện, không phải HTML thật.'}
       ]},
       reconciliation: { title:'Reconciliation — 4 giai đoạn', anchor:'messages.map(msg => <div key={msg.id}', steps:[
-        {name:'First Paint',detail:'VDOM đầu tiên → DOM thật',text:'React dựng cây VDOM đầu tiên và xuất DOM thật tương ứng.'},
-        {name:'Trigger & Re-render',detail:'state đổi · VDOM mới',text:'Component chạy lại và chỉ tính cây VDOM mới trong bộ nhớ.'},
-        {name:'Diffing',detail:'VDOM mới ↔ cũ',text:'React so sánh hai cây để tìm chính xác điểm khác biệt.'},
-        {name:'Commit',detail:'patch tối thiểu → DOM',text:'React áp đúng phần khác biệt lên DOM thật.'}
+        {name:'Render đầu tiên',detail:'UI → host nodes',text:'React tính UI ban đầu rồi commit các host node cần thiết.'},
+        {name:'Re-render',detail:'state đổi · UI mới',text:'React có thể gọi lại component để tính UI kế tiếp; DOM chưa chắc đổi ở pha này.'},
+        {name:'Reconciliation',detail:'mô tả mới ↔ cũ',text:'React đối chiếu mô tả UI theo type, key và các quy tắc nhận diện.'},
+        {name:'Commit',detail:'cập nhật renderer',text:'React DOM áp thay đổi cần thiết; trình duyệt tự quyết định style, layout và paint.'}
       ]},
       keys: { title:'Xóa A: key=index vs key=id', anchor:'key={item.id} data={item}', fields:[{key:'items',label:'Danh sách (xóa phần tử đầu)',type:'text',value:'A, B, C'}], build:v=>{
         const items=(v.items||'A, B, C').split(',').map(x=>x.trim()).filter(Boolean); const after=items.slice(1); const first=items[0]||'A';
@@ -342,13 +373,13 @@ const html = String.raw`<!doctype html>
           {name:'Dùng key=id',detail:after.map(x=>x+' / key='+x).join(' · ')||'Danh sách rỗng',text:'Với id ổn định, React nhận diện đúng '+first+' biến mất; các item còn lại giữ nguyên danh tính.'}
         ];
       }},
-      fiber: { title:'Stack Reconciler vs React Fiber', anchor:'cơ chế này gọi là **time slicing**', steps:[
+      fiber: { title:'Stack Reconciler vs React Fiber', anchor:'Concurrent Rendering', steps:[
         {name:'Stack',detail:'A → B → C → D',text:'Stack Reconciler chạy một khối đồng bộ và không thể dừng giữa chừng.'},
         {name:'Main thread',detail:'bị chiếm dụng',text:'Công việc lớn có thể khiến scroll, click và animation bị giật.'},
-        {name:'Fiber',detail:'A · B  | pause |  C · D',text:'Fiber chia nhỏ công việc, có thể tạm dừng và tiếp tục.'},
-        {name:'Nhường ưu tiên',detail:'click / tương tác',text:'React nhường main thread cho tương tác ưu tiên cao hơn rồi quay lại render.'}
+        {name:'Fiber',detail:'A · B  | pause |  C · D',text:'Fiber biểu diễn công việc để scheduler có thể nhường ở các điểm phù hợp.'},
+        {name:'Nhường ưu tiên',detail:'click / tương tác',text:'React có thể ưu tiên công việc tương tác rồi tiếp tục, làm lại hoặc bỏ render nền trước commit.'}
       ]},
-      hooks: { title:'Class lifecycle ↔ useEffect + cleanup', anchor:'Cả "đăng ký" và "dọn dẹp" nằm CHUNG một khối', steps:[
+      hooks: { title:'Class lifecycle ↔ useEffect + cleanup', anchor:'đơn vị tính năng', steps:[
         {name:'Class · Mount',detail:'componentDidMount',text:'Class đặt logic đăng ký trong componentDidMount.'},
         {name:'Hook · Effect',detail:'useEffect',text:'Hook đặt logic đăng ký trong callback của useEffect.'},
         {name:'Class · Unmount',detail:'componentWillUnmount',text:'Class tách logic dọn dẹp sang lifecycle method khác.'},
@@ -388,8 +419,8 @@ const html = String.raw`<!doctype html>
         {name:'Effect mới',detail:'fetch /users/'+(v.userId||'2'),text:'Effect mới gửi request theo userId mới.'},
         {name:'setUser',detail:'chỉ response mới',text:'Điều kiện !cancelled ngăn response cũ ghi đè dữ liệu mới.'}
       ]},
-      staleClosure: { title:'Stale closure: vì sao count đứng ở 1', anchor:'effect chỉ chạy 1 LẦN DUY NHẤT', steps:[
-        {name:'Mount',detail:'count = 0',text:'Effect chạy một lần khi mount.'},
+      staleClosure: { title:'Stale closure: vì sao count đứng ở 1', anchor:'snapshot lúc mount', steps:[
+        {name:'Mount',detail:'count = 0',text:'Effect đăng ký interval từ snapshot lúc mount.'},
         {name:'Closure',detail:'callback giữ count = 0',text:'Callback của interval đóng gói giá trị count tại thời điểm được tạo.'},
         {name:'Tick 1',detail:'0 + 1 → setCount(1)',text:'Lần đầu state đổi từ 0 thành 1 và UI render lại.'},
         {name:'Tick 2, 3…',detail:'vẫn 0 + 1 → 1',text:'Interval vẫn dùng callback cũ; React nhận lại giá trị 1 nên không render tiếp.'}
@@ -403,39 +434,73 @@ const html = String.raw`<!doctype html>
       callbackMemo: { title:'useCallback giữ reference cho React.memo', anchor:'ExpensiveChild render', steps:[
         {name:'Parent render',detail:'count đổi',text:'State của Parent đổi làm Parent render lại.'},
         {name:'useCallback',detail:'dependency []',text:'useCallback trả lại đúng reference handleClick từ lần trước.'},
-        {name:'React.memo',detail:'so sánh prop onClick',text:'React.memo thấy prop onClick không đổi reference.'},
-        {name:'ExpensiveChild',detail:'bỏ qua re-render',text:'Component con không render lại vì props vẫn giống nhau.'}
+        {name:'React.memo',detail:'so sánh prop onClick',text:'React.memo có thể bỏ qua lần render do cha khi props không đổi theo phép so sánh của nó.'},
+        {name:'ExpensiveChild',detail:'có thể bỏ qua',text:'State hoặc context của chính con vẫn có thể làm con cập nhật; memo là tối ưu, không phải điều kiện đúng đắn.'}
       ]},
       contextFlow: { title:'Context bỏ qua các tầng props trung gian', anchor:'const user = useContext(UserContext)', steps:[
         {name:'Provider',detail:'value={user}',text:'UserContext.Provider cung cấp user cho toàn bộ cây con.'},
         {name:'Layout',detail:'không nhận user prop',text:'Layout chỉ nằm trong cây, không cần truyền hộ dữ liệu.'},
         {name:'Section / Panel',detail:'không prop drilling',text:'Các tầng trung gian tiếp tục không cần biết đến user.'},
         {name:'ProfileCard',detail:'useContext(UserContext)',text:'ProfileCard đọc trực tiếp giá trị từ Provider gần nhất.'}
-      ]}
+      ]},
+      requestRace: { title:'Request race: A không được ghi đè B', anchor:'Checklist cho một resource', steps:[
+        {name:'A bắt đầu',detail:'userId = 1',text:'Màn hình tạo request A cho user 1.'},
+        {name:'B bắt đầu',detail:'userId = 2',text:'Người dùng đổi ngữ cảnh, request B là đại diện cho màn hình hiện tại.'},
+        {name:'B hoàn tất',detail:'commit user 2',text:'UI nhận dữ liệu B vì request/key vẫn hiện hành.'},
+        {name:'A hoàn tất muộn',detail:'bỏ qua / abort',text:'Request ID, key hoặc AbortController ngăn A ghi đè B.'}
+      ]},
+      transition: { title:'Urgent input và transition', anchor:'urgent: input phản hồi ngay', steps:[
+        {name:'Gõ ký tự',detail:'setQuery',text:'Giá trị điều khiển input được cập nhật khẩn cấp.'},
+        {name:'Transition',detail:'setFilter',text:'Cập nhật danh sách tốn kém được đánh dấu không khẩn cấp.'},
+        {name:'Pending',detail:'isPending',text:'UI có thể báo đang cập nhật nhưng vẫn nhận thao tác tiếp.'},
+        {name:'UI theo kịp',detail:'Results',text:'React có thể làm gián đoạn và thay thế render nền trước commit.'}
+      ]},
+      liveReact: { title:'React lab: key, closure và request race', anchor:'React chạy thật — phòng lab cô lập', live:true }
     };
 
-    const FLOW_BY_CHAPTER = { 0:['xssLab','repaint'], 1:['oneWay'], 2:['jsx'], 3:['reconciliation','keys','fiber'], 4:['hooks'], 5:['batching','requestReducer','effectCycle','fetchCleanup','staleClosure','memo','callbackMemo'], 6:['contextFlow','redux'] };
+    const FLOW_BY_CHAPTER = { 0:['snapshot'], 1:['xssLab','repaint'], 2:['oneWay'], 3:['jsx'], 4:['reconciliation','keys','fiber'], 5:['hooks'], 6:['batching','requestReducer','effectCycle','fetchCleanup','staleClosure','memo','callbackMemo'], 7:['contextFlow','redux'], 8:['requestRace'], 9:['transition'], 10:['liveReact'] };
     const chapters = splitSource(SOURCE);
+    const readStorage = (key, fallback) => {
+      try { const value = localStorage.getItem(key); return value === null ? fallback : JSON.parse(value); }
+      catch { return fallback; }
+    };
+    const writeStorage = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
     let current = 0;
-    let completed = new Set(JSON.parse(localStorage.getItem('react-explorer-completed') || '[]'));
+    const knownContentIds = new Set(chapters.map(chapter => chapter.id));
+    let completed = new Set(readStorage('react-explorer-completed-v3', []).filter(id => typeof id === 'string' && knownContentIds.has(id)));
 
     function flowHtml(id, def) {
+      if (def.live) return '<section class="flow" data-flow="'+id+'"><div class="flow-top"><div><div class="flow-label">React lab · iframe sandbox</div><h4>'+escapeHtml(def.title)+'</h4><p class="flow-note">Chọn từng bài theo thứ tự. Mỗi bài chỉ kiểm chứng một ý và tự nêu kết luận sau thao tác. Cần mạng để tải React 19.2 từ CDN.</p></div></div><iframe class="react-lab-frame" sandbox="allow-scripts" title="Phòng lab React lab" srcdoc="'+escapeHtml(reactLabDocument())+'"></iframe></section>';
       const fields=(def.fields||[]).map(field=>{
         const control=field.type==='select' ? '<select data-field="'+field.key+'">'+field.options.map(x=>'<option>'+escapeHtml(x)+'</option>').join('')+'</select>' : '<input data-field="'+field.key+'" type="'+field.type+'" value="'+escapeHtml(field.value)+'" min="1">';
         return '<label class="field">'+escapeHtml(field.label)+control+'</label>';
       }).join('');
-      return '<section class="flow" data-flow="'+id+'"><div class="flow-top"><div><div class="flow-label">Interactive flow</div><h4>'+escapeHtml(def.title)+'</h4></div><span class="flow-counter">1 / 1</span></div>'+(fields?'<div class="flow-inputs">'+fields+'</div>':'')+'<div class="flow-stage"><div class="flow-scene"></div><div class="flow-path"></div><div class="flow-explain"></div></div><div class="flow-controls"><div class="step-dots"></div><button class="run-btn" type="button">Chạy →</button></div></section>';
+      return '<section class="flow" data-flow="'+id+'"><div class="flow-top"><div><div class="flow-label">Mô hình giải thích tương tác</div><h4>'+escapeHtml(def.title)+'</h4><p class="flow-note">Minh họa cơ chế, không phải phép đo hiệu năng hoặc bản thực thi React nội bộ.</p></div><span class="flow-counter" aria-live="polite">1 / 1</span></div>'+(fields?'<div class="flow-inputs">'+fields+'</div>':'')+'<div class="flow-stage"><div class="flow-scene"></div><div class="flow-path"></div><div class="flow-explain" aria-live="polite"></div></div><div class="flow-controls"><div class="step-dots"></div><button class="run-btn" type="button">Chạy →</button></div></section>';
+    }
+
+    function reactLabDocument() {
+      return [
+        '<!doctype html><meta charset="utf-8"><style>body{margin:0;padding:16px;font:14px/1.5 system-ui;color:#17202a;background:#f8fafc}h2{margin:0 0 5px;font-size:19px}p{margin:7px 0}.sub{color:#536273}.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0}.tabs button{background:#eef3f8}.tabs button[aria-selected=true]{background:#163f63;color:#fff;border-color:#163f63}button,input{font:inherit}button{padding:7px 10px;border:1px solid #b9c4d1;border-radius:7px;background:#fff;cursor:pointer}.box{padding:13px;border:1px solid #d9e1ea;border-radius:9px;background:#fff}.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.note{width:130px}.goal{margin:0 0 8px;font-weight:700}.steps{margin:8px 0 13px;padding-left:21px}.result{margin:12px 0 0;padding:9px 11px;border-left:3px solid #167a4a;border-radius:4px;background:#edf9f1;color:#174e32}.status{margin:10px 0 0;color:#536273;font:12px ui-monospace,monospace}.muted{color:#536273;font-size:12px}</style>',
+        '<div id="root">Đang tải React…</div>',
+        '<scr'+'ipt type="module">',
+        'import React,{useRef,useState} from "https://esm.sh/react@19.2.0?dev";import{createRoot}from "https://esm.sh/react-dom@19.2.0/client?dev";const h=React.createElement;',
+        'function Item(p){const[n,setN]=useState("note của "+p.label);return h("label",{className:"row"},h("strong",null,p.label),h("input",{className:"note",value:n,onChange:e=>setN(e.target.value),"aria-label":"Ghi chú của "+p.label}));}',
+        'function KeyLesson(){const[items,setItems]=useState(["A","B","C"]),[byId,setById]=useState(false),[removed,setRemoved]=useState(false);const reset=()=>{setItems(["A","B","C"]);setRemoved(false)};return h("section",null,h("p",{className:"goal"},"Mục tiêu: state của mỗi hàng phải đi cùng dữ liệu, không đi cùng vị trí."),h("ol",{className:"steps"},h("li",null,"Giữ key=index, rồi bấm “Xóa A”."),h("li",null,"So sánh ghi chú còn lại: B sẽ mang note của A; C sẽ mang note của B."),h("li",null,"Bấm “Dùng key=id”, reset và xóa A lần nữa.")),h("div",{className:"box"},h("div",{className:"row"},h("button",{onClick:()=>setById(x=>!x),"aria-pressed":byId},byId?"Đang dùng key=id":"Đang dùng key=index"),h("button",{onClick:()=>{setItems(x=>x.slice(1));setRemoved(true)}},"Xóa A"),h("button",{onClick:reset},"Làm lại")),h("p",{className:"muted"},"Mỗi input có state riêng, khởi đầu là note của chính hàng đó."),items.map((x,i)=>h(Item,{key:byId?x:i,label:x})),removed&&h("p",{className:"result"},byId?"Đúng: B vẫn giữ note của B, vì key mô tả identity của dữ liệu.":"Đã thấy lỗi: B đang giữ note của A. key=index khiến React ghép state theo vị trí 0, 1… thay vì theo item.")));}',
+        'function ClosureLesson(){const[count,setCount]=useState(0),[message,setMessage]=useState("Chưa có callback nào."),timer=useRef();const schedule=()=>{const snapshot=count;clearTimeout(timer.current);setMessage("Đã chụp count="+snapshot+". Bây giờ hãy tăng ngay +2.");timer.current=setTimeout(()=>{setCount(snapshot+1);setMessage("Callback cũ chạy: setCount("+(snapshot+1)+"). Nó không biết count đã tăng sau đó.");},700)};const reset=()=>{clearTimeout(timer.current);setCount(0);setMessage("Chưa có callback nào.")};return h("section",null,h("p",{className:"goal"},"Mục tiêu: callback giữ snapshot tại lúc nó được tạo."),h("ol",{className:"steps"},h("li",null,"Bấm “Chụp callback”."),h("li",null,"Ngay lập tức bấm “Tăng +2”. count sẽ thành 2."),h("li",null,"Chờ 0,7 giây: callback cũ ghi lại 1.")),h("div",{className:"box"},h("div",{className:"row"},h("button",{onClick:schedule},"Chụp callback"),h("button",{onClick:()=>setCount(x=>x+2)},"Tăng +2"),h("button",{onClick:reset},"Làm lại"),h("strong",null,"count = "+count)),h("p",{className:"status"},message),h("p",{className:"result"},"Bài học: khi state mới dựa vào state cũ, viết setCount(previous => previous + 1). React sẽ đưa previous mới nhất vào hàm.")));}',
+        'function RaceLesson(){const[safe,setSafe]=useState(true),[who,setWho]=useState("Chưa chạy"),[message,setMessage]=useState(""),latest=useRef(0);const run=()=>{const aToken=++latest.current,bToken=++latest.current;setWho("Đang chờ A và B…");setMessage("A bắt đầu trước nhưng chậm (0,8s); B bắt đầu sau nhưng nhanh (0,22s).");setTimeout(()=>{if(safe&&bToken!==latest.current)return;setWho("B (mới hơn)");setMessage("B hoàn tất trước và hiện lên UI.");},220);setTimeout(()=>{if(safe&&aToken!==latest.current){setMessage("A về muộn nên bị bỏ qua: UI vẫn giữ B.");return}setWho("A (cũ nhưng về muộn)");setMessage("A đã ghi đè B — đây là race condition.");},800)};return h("section",null,h("p",{className:"goal"},"Mục tiêu: request khởi tạo trước không có quyền ghi đè UI hiện tại khi nó về muộn."),h("ol",{className:"steps"},h("li",null,"Để “Bảo vệ response mới” bật, rồi bấm chạy A → B."),h("li",null,"Chờ 0,8 giây: kết quả phải là B."),h("li",null,"Tắt bảo vệ và chạy lại để quan sát A ghi đè B.")),h("div",{className:"box"},h("div",{className:"row"},h("button",{onClick:()=>setSafe(x=>!x),"aria-pressed":safe},safe?"Bảo vệ response mới: bật":"Bảo vệ response mới: tắt"),h("button",{onClick:run},"Chạy A chậm → B nhanh")),h("p",null,h("strong",null,"UI đang hiện: "+who)),h("p",{className:"status"},message),h("p",{className:"result"},"Trong app thật, dùng AbortController, request id hoặc key cache để đảm bảo response cũ không ghi đè dữ liệu hiện hành.")));}',
+        'function App(){const[active,setActive]=useState(0),lessons=[["1. Key","Key và state item"],["2. Closure","Snapshot trong callback"],["3. Race","Response cũ và mới"]],Lesson=[KeyLesson,ClosureLesson,RaceLesson][active];return h("main",null,h("h2",null,"React lab · từng bài một"),h("p",{className:"sub"},"Không cần làm cả ba. Chọn một bài, đọc mục tiêu, làm đúng các bước, rồi đối chiếu kết luận màu xanh."),h("div",{className:"tabs",role:"tablist","aria-label":"Bài thực hành"},lessons.map((item,i)=>h("button",{key:item[0],role:"tab","aria-selected":active===i,onClick:()=>setActive(i)},item[0]))),h("h3",null,lessons[active][1]),h(Lesson));}createRoot(document.getElementById("root")).render(h(App));',
+        '</scr'+'ipt>'
+      ].join('');
     }
 
     function renderMarkdown(chapter) {
-      const tokens=blockTokens(chapter.raw); const flowIds=FLOW_BY_CHAPTER[chapter.index]||[]; const pending=new Set(flowIds); let html='';
-      for (const token of tokens) {
-        html += tokenHtml(token);
-        for (const id of [...pending]) {
-          if (token.raw.includes(FLOW_DEFS[id].anchor)) { html += flowHtml(id,FLOW_DEFS[id]); pending.delete(id); }
-        }
+      const flowIds=FLOW_BY_CHAPTER[chapter.index]||[];
+      let html=chapter.html;
+      for (const id of flowIds) {
+        const marker='<!--FLOW:'+id+'-->';
+        const flow=flowHtml(id,FLOW_DEFS[id]);
+        html=html.includes(marker) ? html.replace(marker,flow) : html+flow;
       }
-      for (const id of pending) html += flowHtml(id,FLOW_DEFS[id]);
       return html;
     }
 
@@ -494,6 +559,7 @@ const html = String.raw`<!doctype html>
         return '<div class="timeline"><div class="timeline-row"><div class="timeline-label">Stack</div><div class="timeline-track"><span class="work-block '+(step>=0?'on':'')+'">A</span><span class="work-block '+(step>=0?'on':'')+'">B</span><span class="work-block '+(step>=0?'on':'')+'">C</span><span class="work-block '+(step>=0?'on':'')+'">D · block</span></div></div><div class="timeline-row"><div class="timeline-label">Fiber</div><div class="timeline-track"><span class="work-block '+(step>=2?'on':'')+'">A</span><span class="work-block '+(step>=2?'on':'')+'">B</span><span class="work-block pause">pause</span><span class="work-block '+(step>=2?'on':'')+'">C</span><span class="work-block '+(step>=2?'on':'')+'">D</span></div></div><div class="timeline-row"><div class="timeline-label">Main thread</div><div class="timeline-track"><span class="work-block">render</span><span class="work-block '+(step>=3?'event':'')+'">click</span><span class="work-block">resume</span></div></div></div>';
       }
       const generic={
+        snapshot:[['Render A','count=0'],['Handler A','closure count=0'],['setCount','request 1'],['Render B','count=1']],
         oneWay:[['Child','button click'],['↑','onIncrease()'],['Parent','setCount'],['↓','props mới']],
         jsx:[['JSX','<h1>Hello</h1>'],['Babel','transform'],['Object','type + props']],
         hooks:[['Class','componentDidMount'],['Hook','useEffect'],['Class','componentWillUnmount'],['Hook','cleanup']],
@@ -503,14 +569,16 @@ const html = String.raw`<!doctype html>
         fetchCleanup:[['fetch','/users/1'],['userId','1 → '+(values.userId||'2')],['cleanup','cancelled=true'],['fetch','/users/'+(values.userId||'2')],['UI','response mới']],
         staleClosure:[['Mount','count=0'],['Closure','giữ count=0'],['Tick 1','setCount(1)'],['Tick 2…','vẫn setCount(1)']],
         memo:[['Render','ProductList'],['Deps','products + keyword'],[values.memoCase==='keyword đổi'?'Miss':'Hit',values.memoCase==='keyword đổi'?'filter lại':'dùng cache'],['UI','filtered.map']],
-        callbackMemo:[['Parent','count đổi'],['useCallback','cùng reference'],['React.memo','props không đổi'],['Child','skip render']]
+        callbackMemo:[['Parent','count đổi'],['useCallback','cùng reference'],['React.memo','props không đổi'],['Child','skip render']],
+        requestRace:[['Request A','user 1'],['Request B','user 2'],['B resolve','commit user 2'],['A resolve','ignored']],
+        transition:[['Input','query mới'],['Transition','filter mới'],['Pending','UI vẫn tương tác'],['Results','theo kịp']]
       }[id]||[];
       return '<div class="scene-pipeline">'+generic.map((item,index)=>dataCard(item[0],item[0],item[1],index===step)+(index<generic.length-1?'<div class="scene-arrow '+(index<step?'hot':'')+'">→</div>':'')).join('')+'</div>';
     }
 
     function setupFlows() {
       document.querySelectorAll('.flow').forEach(root=>{
-        const def=FLOW_DEFS[root.dataset.flow]; let step=0;
+        const def=FLOW_DEFS[root.dataset.flow]; if (def.live) return; let step=0;
         const values=()=>Object.fromEntries([...root.querySelectorAll('[data-field]')].map(el=>[el.dataset.field,el.value]));
         const steps=()=>def.build?def.build(values()):def.steps;
         const paint=()=>{
@@ -537,13 +605,39 @@ const html = String.raw`<!doctype html>
 
     function shortTitle(title) { return title.replace(/^\d+\.\s*/,''); }
     function renderSidebar() {
-      document.getElementById('chapterList').innerHTML=chapters.map((chapter,index)=>'<li><button class="chapter-link '+(index===current?'active ':'')+(completed.has(index)?'done':'')+'" data-index="'+index+'"><span class="chapter-no">'+String(index+1).padStart(2,'0')+'</span><span class="chapter-name">'+escapeHtml(shortTitle(chapter.title))+'</span><span class="check">✓</span></button></li>').join('');
+      const sections=chapters[current].sections;
+      document.getElementById('chapterList').innerHTML=chapters.map((chapter,index)=>{
+        const active=index===current;
+        const sectionHtml=active&&sections.length?'<ul class="section-list">'+sections.map(section=>'<li><button class="section-link '+(section.level===4?'sec-h4':'')+'" data-heading="'+escapeHtml(section.id)+'">'+escapeHtml(shortTitle(section.title))+'</button></li>').join('')+'</ul>':'';
+        return '<li><button class="chapter-link '+(active?'active ':'')+(completed.has(chapter.id)?'done':'')+'" data-index="'+index+'"'+(active?' aria-current="page"':'')+'><span class="chapter-no">'+String(index+1).padStart(2,'0')+'</span><span class="chapter-name">'+escapeHtml(shortTitle(chapter.title))+'</span><span class="check" aria-label="Đã xem">✓</span></button>'+sectionHtml+'</li>';
+      }).join('');
     }
     function navButton(index,direction) {
       if(index<0||index>=chapters.length) return '<div class="nav-spacer"></div>';
       return '<button class="nav-btn '+(direction==='next'?'next':'')+'" data-index="'+index+'"><span class="nav-dir">'+(direction==='next'?'Chương tiếp theo →':'← Chương trước')+'</span><span class="nav-title">'+escapeHtml(shortTitle(chapters[index].title))+'</span></button>';
     }
-    function goTo(index,updateHash=true) {
+    function searchText(raw) {
+      const fence = String.fromCharCode(96);
+      return raw.replace(/<!--[^]*?-->/g,'').replace(new RegExp(fence+'{3}[^\\n]*','g'),'').replace(/[_*>#|\[\]()]/g,' ').replace(/\s+/g,' ').trim();
+    }
+    const searchIndex=chapters.flatMap(chapter=>{
+      const text=searchText(chapter.raw);
+      const headings=chapter.sections;
+      return [{ chapter, heading:'', title:chapter.title, text }, ...headings.map(heading=>({ chapter, heading:heading.id, title:heading.title, text }))];
+    });
+    function renderSearch(query) {
+      const root=document.getElementById('searchResults');
+      const normalized=query.trim().toLocaleLowerCase('vi-VN');
+      if (!normalized) { root.hidden=true; root.innerHTML=''; return; }
+      const results=searchIndex.filter(item=>(item.title+' '+item.text).toLocaleLowerCase('vi-VN').includes(normalized)).slice(0,12);
+      root.hidden=false;
+      if (!results.length) { root.innerHTML='<div class="search-empty">Không tìm thấy kết quả.</div>'; return; }
+      root.innerHTML=results.map(item=>{
+        const haystack=item.text; const at=haystack.toLocaleLowerCase('vi-VN').indexOf(normalized); const start=Math.max(0,at-72); const excerpt=(start?'…':'')+haystack.slice(start,at+normalized.length+115)+(at+normalized.length+115<haystack.length?'…':'');
+        return '<button type="button" class="search-result" role="option" data-search-index="'+item.chapter.index+'" data-heading="'+escapeHtml(item.heading)+'"><small>'+escapeHtml(shortTitle(item.chapter.title))+'</small><strong>'+escapeHtml(shortTitle(item.title))+'</strong><span>'+escapeHtml(excerpt)+'</span></button>';
+      }).join('');
+    }
+    function goTo(index,updateHash=true,heading='') {
       current=Math.max(0,Math.min(index,chapters.length-1)); const chapter=chapters[current];
       document.getElementById('content').innerHTML=renderMarkdown(chapter);
       document.getElementById('chapterKicker').textContent='Chương '+(current+1).toString().padStart(2,'0');
@@ -551,8 +645,15 @@ const html = String.raw`<!doctype html>
       document.getElementById('currentTitle').textContent=chapter.title;
       document.getElementById('chapterNav').innerHTML=navButton(current-1,'prev')+navButton(current+1,'next');
       document.title=chapter.title+' — React Explorer'; renderSidebar(); setupFlows(); setupCopy();
-      if(updateHash) history.pushState(null,'','#'+chapter.slug);
-      document.body.classList.remove('menu-open'); window.scrollTo({top:0,behavior:'instant'}); updateProgress();
+      if(updateHash) history.pushState(null,'','#'+chapter.slug+(heading?'--'+heading:''));
+      setMenu(false);
+      const target=heading&&document.getElementById(heading);
+      if(target) { target.setAttribute('tabindex','-1'); target.focus({preventScroll:true}); target.scrollIntoView({block:'start'}); }
+      else {
+        window.scrollTo({top:0,behavior:'auto'});
+        if (updateHash) { const title=document.querySelector('#content h2'); if(title) { title.setAttribute('tabindex','-1'); title.focus({preventScroll:true}); } }
+      }
+      updateProgress();
     }
     function setupCopy() {
       document.querySelectorAll('.copy-btn').forEach(button=>button.addEventListener('click',async()=>{
@@ -562,27 +663,65 @@ const html = String.raw`<!doctype html>
     function updateProgress() {
       const doc=document.documentElement; const max=doc.scrollHeight-innerHeight; const ratio=max>0?scrollY/max:1;
       document.getElementById('progressBar').style.width=(ratio*100)+'%';
-      if(ratio>.96 && !completed.has(current)) { completed.add(current); localStorage.setItem('react-explorer-completed',JSON.stringify([...completed])); renderSidebar(); }
+      const chapterId=chapters[current].id;
+      if(ratio>.96 && !completed.has(chapterId)) { completed.add(chapterId); writeStorage('react-explorer-completed-v3',[...completed]); renderSidebar(); }
     }
-    function indexFromHash() { const hash=location.hash.slice(1); const found=chapters.findIndex(ch=>ch.slug===hash || hash==='chuong-'+(ch.index+1)); return found<0?0:found; }
-    document.addEventListener('click',event=>{ const target=event.target.closest('[data-index]'); if(target) goTo(Number(target.dataset.index)); });
-    document.getElementById('menuBtn').addEventListener('click',()=>document.body.classList.toggle('menu-open'));
-    document.getElementById('scrim').addEventListener('click',()=>document.body.classList.remove('menu-open'));
-    document.getElementById('themeBtn').addEventListener('click',()=>{ const next=document.documentElement.dataset.theme==='light'?'dark':'light'; document.documentElement.dataset.theme=next; localStorage.setItem('react-explorer-theme',next); });
+    function hashTarget() {
+      const hash=decodeURIComponent(location.hash.slice(1));
+      const chapter=chapters.findIndex(ch=>hash===ch.slug||hash.startsWith(ch.slug+'--')||hash==='chuong-'+(ch.index+1));
+      const found=chapter<0?0:chapter;
+      const prefix=chapters[found].slug+'--';
+      return { index:found, heading:hash.startsWith(prefix)?hash.slice(prefix.length):'' };
+    }
+    function setMenu(open) {
+      document.body.classList.toggle('menu-open',open);
+      document.getElementById('menuBtn').setAttribute('aria-expanded',String(open));
+      syncSidebarAccessibility(open);
+    }
+    function syncSidebarAccessibility(open=document.body.classList.contains('menu-open')) {
+      const sidebar=document.getElementById('sidebar');
+      const hidden=matchMedia('(max-width: 920px)').matches&&!open;
+      sidebar.inert=hidden;
+      sidebar.setAttribute('aria-hidden',String(hidden));
+    }
+    document.addEventListener('click',event=>{
+      const searchResult=event.target.closest('[data-search-index]');
+      if(searchResult) { document.getElementById('globalSearch').value=''; renderSearch(''); goTo(Number(searchResult.dataset.searchIndex),true,searchResult.dataset.heading); return; }
+      const section=event.target.closest('.section-link[data-heading]');
+      if(section) { goTo(current,true,section.dataset.heading); return; }
+      const target=event.target.closest('[data-index]'); if(target) goTo(Number(target.dataset.index));
+    });
+    document.getElementById('menuBtn').addEventListener('click',()=>setMenu(!document.body.classList.contains('menu-open')));
+    document.getElementById('scrim').addEventListener('click',()=>setMenu(false));
+    document.getElementById('themeBtn').addEventListener('click',()=>{ const next=document.documentElement.dataset.theme==='light'?'dark':'light'; document.documentElement.dataset.theme=next; document.getElementById('themeBtn').setAttribute('aria-pressed',String(next==='dark')); writeStorage('react-explorer-theme',next); });
+    document.getElementById('globalSearch').addEventListener('input',event=>renderSearch(event.target.value));
+    document.getElementById('globalSearch').addEventListener('keydown',event=>{ if(event.key==='Escape') { event.currentTarget.value=''; renderSearch(''); event.currentTarget.blur(); } });
     addEventListener('scroll',updateProgress,{passive:true});
-    addEventListener('popstate',()=>goTo(indexFromHash(),false));
+    addEventListener('resize',()=>syncSidebarAccessibility());
+    addEventListener('popstate',()=>{ const target=hashTarget(); goTo(target.index,false,target.heading); });
     addEventListener('keydown',event=>{ if(/INPUT|SELECT|TEXTAREA/.test(event.target.tagName))return; if(event.key==='ArrowRight'&&current<chapters.length-1)goTo(current+1); if(event.key==='ArrowLeft'&&current>0)goTo(current-1); });
-    const savedTheme=localStorage.getItem('react-explorer-theme'); if(savedTheme)document.documentElement.dataset.theme=savedTheme;
+    const savedTheme=readStorage('react-explorer-theme',null); if(savedTheme==='light'||savedTheme==='dark')document.documentElement.dataset.theme=savedTheme;
+    document.getElementById('themeBtn').setAttribute('aria-pressed',String(document.documentElement.dataset.theme==='dark'));
     document.getElementById('sourceMeta').innerHTML='Nguồn nguyên văn<br>'+SOURCE.length.toLocaleString('vi-VN')+' ký tự · '+chapters.length+' chương';
     console.info('[React Explorer] Source integrity:', {characters:SOURCE.length,chapters:chapters.map(ch=>({title:ch.title,characters:ch.raw.length}))});
-    goTo(indexFromHash(),false);
+    syncSidebarAccessibility();
+    { const target=hashTarget(); goTo(target.index,false,target.heading); }
   </script>
 </body>
 </html>`;
 
 fs.writeFileSync(outputPath, html, 'utf8');
 
-const headings = [...markdown.matchAll(/^## (.+)$/gm)].map(match => match[1]);
-if (headings.length !== 8) throw new Error(`Expected 8 chapters, received ${headings.length}`);
+const headings = sourceAst.filter(token => token.type === 'heading' && token.depth === 2);
+const contentIds = [...markdown.matchAll(/^<!--\s*content-id:\s*([a-z0-9-]+)\s*-->\s*$/gim)].map(match => match[1]);
+if (!headings.length) throw new Error('No chapters found in Markdown AST');
+if (contentIds.length < headings.length) throw new Error(`Expected a stable content-id for every chapter; found ${contentIds.length} ids for ${headings.length} chapters.`);
+if (new Set(contentIds).size !== contentIds.length) throw new Error('Duplicate content-id found in Markdown source');
 if (!html.includes(encodedSource)) throw new Error('Source embedding integrity check failed');
 console.log(`Built ${outputPath}: ${markdown.length} source characters, ${headings.length} chapters, ${html.length} HTML characters.`);
+}
+
+build().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

