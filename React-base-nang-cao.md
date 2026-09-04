@@ -2,6 +2,8 @@
 
 > Tài liệu này được viết lại với mục tiêu: người mới học React không chỉ biết "gõ code chạy được", mà hiểu **vì sao** React được thiết kế như vậy, và có thể tự kiểm chứng bằng tool thật thay vì học vẹt lý thuyết.
 
+Các sơ đồ tương tác đều có **code trace theo từng bước**: dòng đang chạy được tô sáng, các dòng đã đi qua được đánh dấu và state/kết quả tương ứng xuất hiện ngay bên cạnh. Đây là mô hình diễn giải có thể điều khiển để nối code với cơ chế; phòng lab ở Chương 10 mới là React chạy thật trong iframe sandbox.
+
 ---
 
 <!-- content-id: javascript-foundations -->
@@ -392,14 +394,14 @@ Mở file `test-compiled.js` — đây chính xác là code trình duyệt thự
 
 **Cách 4 — console.log trực tiếp object JSX:** đây là cách nhanh nhất để kiểm chứng phần 3.4 dưới đây.
 
-### 3.4. JSX không tạo ra HTML — nó tạo ra một object JavaScript
+### 3.4. JSX không tạo ra HTML — nó tạo ra React element
 
-Dù biên dịch kiểu nào, kết quả cuối cùng luôn chỉ là **một object JS thuần**, mô tả giao diện chứ không phải HTML thật:
+JSX được biên dịch thành lời gọi tạo **React element** — một giá trị JavaScript mô tả giao diện chứ chưa phải HTML hay DOM thật:
 
 ```jsx
 <h1>Hello</h1>
 ```
-tương đương với object:
+tương đương về ý nghĩa với một element có hình dạng đơn giản hóa:
 ```javascript
 {
   type: 'h1',
@@ -414,7 +416,7 @@ tương đương với object:
 const element = <h1 className="greeting">Hello, World!</h1>;
 console.log(element);
 ```
-Mở Console, bạn sẽ thấy đúng object này hiện ra — không phải chuỗi HTML `"<h1 class=..."`, mà là object JS với `type`, `props`.
+Mở Console, bạn sẽ thấy một React element — không phải chuỗi HTML `"<h1 class=..."`. Có thể quan sát `type` và `props` để học, nhưng hãy coi element là giá trị opaque của React, không viết logic phụ thuộc vào toàn bộ cấu trúc nội bộ hiển thị trong Console.
 
 <!-- content-id: jsx-element-safety -->
 ### 3.5. React element, `$$typeof` và ranh giới an toàn
@@ -1243,7 +1245,7 @@ function Button() {
 - Dữ liệu cần chia sẻ ở nhiều component không liên quan nhau trong cây (theme, ngôn ngữ, thông tin user đăng nhập).
 - Tránh prop drilling qua nhiều tầng trung gian không dùng đến dữ liệu đó.
 
-**Giới hạn cần biết:** khi giá trị trong `Provider` thay đổi, **toàn bộ component** đang gọi `useContext` với context đó đều re-render — kể cả những component chỉ dùng một phần nhỏ không thay đổi. Vì vậy Context phù hợp với dữ liệu **ít thay đổi**; với dữ liệu cập nhật liên tục, nên dùng Redux Toolkit (xem chương 7).
+**Giới hạn cần biết:** React so sánh `value` cũ và mới của Provider bằng `Object.is`; khi value đổi, các component đang đọc context đó nhận giá trị mới, và `memo` không chặn được chính cập nhật context. Điều này không có nghĩa “context đổi thường xuyên thì bắt buộc dùng Redux”. Trước hết hãy giữ Provider đúng phạm vi, tách context theo trách nhiệm và tránh tạo object/function mới không cần thiết; chỉ cân nhắc external store như Redux Toolkit khi cần selector, luồng cập nhật, tooling hoặc kiến trúc state phù hợp hơn.
 
 **Pattern phổ biến — tách Provider thành custom hook:**
 
@@ -1359,7 +1361,7 @@ Dùng cho          Dữ liệu hiển      Giá trị nội bộ /
 
 ### 6.7. `useMemo` — ghi nhớ kết quả tính toán tốn kém
 
-`useMemo` nhận một hàm tính toán và mảng dependency — chỉ chạy lại hàm đó khi dependency thay đổi, các lần render khác trả về kết quả đã lưu cache.
+`useMemo` nhận một hàm tính toán và mảng dependency. Trong các lần render tiếp theo, React thường trả lại kết quả cache khi mọi dependency vẫn bằng nhau theo `Object.is`, và tính lại khi có dependency đổi.
 
 ```jsx
 function ProductList({ products, keyword }) {
@@ -1378,8 +1380,10 @@ function ProductList({ products, keyword }) {
 - Component re-render thường xuyên do lý do không liên quan đến dependency.
 
 **Khi nào KHÔNG NÊN dùng:**
-- Tính toán đơn giản (cộng 2 số, nối chuỗi) — chi phí so sánh dependency của `useMemo` còn nặng hơn chính phép tính.
+- Tính toán đơn giản (cộng 2 số, nối chuỗi) — memoization thường không đem lại lợi ích đáng kể.
 - Không nên áp dụng tràn lan "cho chắc" — mỗi `useMemo` đều có overhead riêng và làm code khó đọc hơn.
+
+`useMemo` là tối ưu hiệu năng, không phải bảo đảm ngữ nghĩa: React có thể bỏ cache vì một lý do cụ thể. Nếu bỏ `useMemo` làm chương trình sai, hãy sửa mô hình state/logic trước.
 
 ---
 
@@ -1412,7 +1416,7 @@ const ExpensiveChild = React.memo(function ExpensiveChild({ onClick }) {
 });
 ```
 
-**Cách tự kiểm chứng:** xóa `useCallback`, thay bằng `const handleClick = () => {...}` thường, mở Console, click "Tăng Parent" nhiều lần — dòng log `ExpensiveChild render` xuất hiện dù ExpensiveChild không liên quan đến `count`. Thêm lại `useCallback` → dòng log biến mất (chỉ log 1 lần lúc mount).
+**Cách tự kiểm chứng:** xóa `useCallback`, thay bằng `const handleClick = () => {...}` thường, mở Console, click "Tăng Parent" nhiều lần — dòng log `ExpensiveChild render` xuất hiện dù ExpensiveChild không liên quan đến `count`. Thêm lại `useCallback` thì lần render do Parent thường được bỏ qua khi props khác không đổi. Trong development, Strict Mode có thể gọi render thêm để tìm code không thuần; đừng dùng số log lúc mount như một cam kết production.
 
 **`useCallback` thực chất là `useMemo` cho hàm:**
 
@@ -1611,7 +1615,7 @@ function ProfileCard() {
 }
 ```
 
-**Giới hạn quan trọng cần biết:** khi giá trị trong `Provider` đổi, **mọi component** đang gọi `useContext` với context đó sẽ re-render — kể cả những component chỉ dùng một phần nhỏ của dữ liệu không hề đổi. Ví dụ nếu `UserContext` chứa cả `{ name, theme, notifications }` và chỉ `notifications` đổi liên tục (do có tin nhắn mới mỗi giây), thì mọi component chỉ hiển thị `name` (vốn không đổi) vẫn bị ép re-render theo. Vì vậy Context phù hợp với dữ liệu **ít thay đổi** (theme, ngôn ngữ, thông tin đăng nhập), không phù hợp với dữ liệu cập nhật liên tục.
+**Giới hạn quan trọng cần biết:** khi giá trị trong `Provider` đổi, **mọi component** đang gọi `useContext` với context đó nhận cập nhật — kể cả component chỉ dùng một phần nhỏ không đổi. Ví dụ nếu `UserContext` chứa cả `{ name, theme, notifications }` và chỉ `notifications` đổi liên tục, component chỉ hiển thị `name` vẫn có thể render lại. Đây là tín hiệu để tách context, ổn định Provider value hoặc cân nhắc store có selector; tần suất cập nhật một mình không tự quyết định rằng Context “không phù hợp” hay Redux là bắt buộc.
 
 ### 7.3. Redux và Redux Toolkit — khi Context không còn đủ
 
@@ -1895,9 +1899,9 @@ Phức tạp vừa      → useReducer            State có nhiều nhánh logic
                                            liên quan (loading/error/data),
                                            nhiều action trên cùng 1 state
 
-Chia sẻ qua cây   → Context API           Dữ liệu ít đổi (theme, locale,
-                                           user đăng nhập), cần đọc ở
-                                           nhiều component không liên quan
+Chia sẻ qua cây   → Context API           Giá trị thuộc một phạm vi cây
+                                           (theme, locale, user), cần đọc
+                                           sâu mà không truyền props hộ
 
 Phức tạp, nhiều   → Redux Toolkit         Nhiều slice state độc lập,
 luồng dữ liệu                             nhiều nơi đọc + ghi cùng lúc,
@@ -2079,7 +2083,7 @@ Sau khi nắm vững nền tảng ở tài liệu này, các chủ đề nên h�
 | Chủ đề | Lý do |
 |--------|-------|
 | **React Router** | Điều hướng SPA — gần như mọi app thực tế đều cần |
-| **React Query / SWR** | Thay thế `useEffect` + `useState` khi fetch data — giải quyết caching, refetch, stale data |
+| **TanStack Query / SWR** | Quản lý server state thay cho việc tự ghép nhiều `useEffect` + `useState`: caching, refetch, stale data và invalidation |
 | **Next.js** | SSR, SSG, file-based routing, API routes — chuẩn mực cho app production |
 | **TypeScript + React** | Type safety cho props, state, hooks — bắt buộc trong team/dự án thực |
 | **Testing (React Testing Library)** | Viết test cho component theo hành vi người dùng |
@@ -2091,7 +2095,7 @@ Các khẳng định về API React trong tài liệu nên được đối chi�
 
 - [React — Render and Commit](https://react.dev/learn/render-and-commit), [Preserving and Resetting State](https://react.dev/learn/preserving-and-resetting-state), [Rendering Lists](https://react.dev/learn/rendering-lists).
 - [React — State as a Snapshot](https://react.dev/learn/state-as-a-snapshot), [Queueing a Series of State Updates](https://react.dev/learn/queueing-a-series-of-state-updates), [useEffect](https://react.dev/reference/react/useEffect), [useRef](https://react.dev/reference/react/useRef).
-- [React — memo](https://react.dev/reference/react/memo), [useMemo](https://react.dev/reference/react/useMemo), [Sharing State Between Components](https://react.dev/learn/sharing-state-between-components).
+- [React — memo](https://react.dev/reference/react/memo), [useMemo](https://react.dev/reference/react/useMemo), [useContext](https://react.dev/reference/react/useContext), [Sharing State Between Components](https://react.dev/learn/sharing-state-between-components).
 - [Redux Toolkit — createAsyncThunk](https://redux-toolkit.js.org/api/createAsyncThunk), [WHATWG — Dynamic markup insertion](https://html.spec.whatwg.org/multipage/dynamic-markup-insertion.html), [web.dev — Rendering performance](https://web.dev/articles/rendering-performance).
 - [React — Choosing the State Structure](https://react.dev/learn/choosing-the-state-structure), [Managing State](https://react.dev/learn/managing-state), [Synchronizing with Effects](https://react.dev/learn/synchronizing-with-effects).
 - [React — useTransition](https://react.dev/reference/react/useTransition), [useDeferredValue](https://react.dev/reference/react/useDeferredValue), [Suspense](https://react.dev/reference/react/Suspense), [React Developer Tools](https://react.dev/learn/react-developer-tools).

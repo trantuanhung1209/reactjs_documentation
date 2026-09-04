@@ -9,7 +9,7 @@ const encodedSource = Buffer.from(markdown, 'utf8').toString('base64');
 const sourceAst = marked.lexer(markdown, { gfm: true });
 
 const flowBindings = {
-  snapshot:'Hãy đọc handler như một “bức ảnh chụp”', xssLab:'Demo bên dưới dùng payload vô hại', repaint:'render lại cả 1000 tin nhắn cũ + 1 tin mới', oneWay:'function Child({ onIncrease })', jsx:"children: 'Hello'", reconciliation:'messages.map(msg => <div key={msg.id}', keys:'key={item.id} data={item}', fiber:'Concurrent Rendering', hooks:'đơn vị tính năng', redux:'dispatch(removeItem(item.id))', batching:'count tăng đúng 3, vì mỗi lần React đưa', requestReducer:'return <div>{state.data.name}</div>;', effectCycle:'}, [dependencies]);', fetchCleanup:'return user ? <div>{user.name}</div>', staleClosure:'snapshot lúc mount', memo:'}, [products, keyword]);', callbackMemo:'ExpensiveChild render', contextFlow:'const user = useContext(UserContext)', requestRace:'Checklist cho một resource', transition:'urgent: input phản hồi ngay', liveReact:'React lab — phòng lab cô lập'
+  snapshot:'Hãy đọc handler như một “bức ảnh chụp”', asyncOrder:'b có thể resolve trước a.', immutableFlow:'Nếu có thể tính một giá trị từ props/state', xssLab:'Demo bên dưới dùng payload vô hại', repaint:'render lại cả 1000 tin nhắn cũ + 1 tin mới', declarativeFlow:'Công thức cốt lõi:', compositionFlow:'React ưu tiên Composition hơn Inheritance.', oneWay:'function Child({ onIncrease })', jsx:"children: 'Hello'", reconciliation:'messages.map(msg => <div key={msg.id}', keys:'key={item.id} data={item}', fiber:'Concurrent Rendering', hooks:'đơn vị tính năng', redux:'dispatch(removeItem(item.id))', batching:'count tăng đúng 3, vì mỗi lần React đưa', requestReducer:'return <div>{state.data.name}</div>;', effectCycle:'}, [dependencies]);', fetchCleanup:'return user ? <div>{user.name}</div>', staleClosure:'snapshot lúc mount', memo:'}, [products, keyword]);', callbackMemo:'ExpensiveChild render', contextFlow:'const user = useContext(UserContext)', refFlow:'Điểm khác biệt cốt lõi so với', customHookFlow:'Nếu cần thêm debounce', thunkFlow:'chuẩn hóa vòng đời', statePlacement:'Trước khi chọn', controlledForm:'Input controlled nhận', serverCache:'Checklist cho một resource', requestRace:'Checklist cho một resource', transition:'urgent: input phản hồi ngay', suspenseFlow:'không tự kích hoạt Suspense', errorBoundaryFlow:'Error Boundary hiển thị fallback', testingFlow:'Test nên kiểm tra điều người dùng', accessibilityFlow:'Ưu tiên HTML semantic', liveReact:'React lab — phòng lab cô lập'
 };
 
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
@@ -230,6 +230,19 @@ const html = String.raw`<!doctype html>
     .work-block.event { color: #101419; background: var(--warn); animation: nodePop .4s ease both; }
     .work-block.pause { flex: .45; color: var(--accent); border: 1px dashed var(--accent); background: transparent; }
     .flow-explain { min-height: 44px; margin-top: 15px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .code-trace { width: 100%; margin: 0 0 20px; display: grid; grid-template-columns: minmax(0,1.45fr) minmax(190px,.55fr); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--code); }
+    .trace-code { min-width: 0; padding: 10px 0; overflow-x: auto; }
+    .trace-head { padding: 9px 12px; color: var(--faint); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; letter-spacing: .12em; text-transform: uppercase; background: var(--surface-2); }
+    .trace-line { min-width: max-content; padding: 4px 14px 4px 0; display: grid; grid-template-columns: 36px 1fr; border-left: 3px solid transparent; color: #8791a1; font: 11px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; transition: .2s ease; }
+    .trace-line-number { padding-right: 9px; color: #4f5968; text-align: right; user-select: none; }
+    .content .trace-line code { padding: 0; border: 0; border-radius: 0; color: inherit; background: transparent; font: inherit; white-space: pre; }
+    .trace-line.done { color: #a8b1bf; background: color-mix(in srgb,var(--good) 4%,transparent); }
+    .trace-line.current { border-left-color: var(--accent); color: #f2f7fb; background: color-mix(in srgb,var(--accent) 13%,transparent); box-shadow: inset 3px 0 10px color-mix(in srgb,var(--accent) 8%,transparent); }
+    .trace-line.current .trace-line-number { color: var(--accent); font-weight: 800; }
+    .trace-result { min-width: 0; border-left: 1px solid var(--line); display: grid; grid-template-rows: auto 1fr; background: color-mix(in srgb,var(--surface-2) 78%,var(--code)); }
+    .trace-result-body { padding: 15px; display: grid; align-content: center; gap: 8px; }
+    .trace-result-label { color: var(--accent); font: 700 9px/1 ui-monospace,SFMono-Regular,monospace; text-transform: uppercase; letter-spacing: .1em; }
+    .trace-result-value { color: var(--text); font: 12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
     .flow-controls { margin-top: 17px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .step-dots { display: flex; gap: 6px; }
     .step-dot { width: 27px; height: 5px; border: 0; border-radius: 4px; background: var(--line); cursor: pointer; }
@@ -280,6 +293,7 @@ const html = String.raw`<!doctype html>
       .flow-top { gap: 8px; }
       .flow-stage { padding: 17px; }
       .flow-scene { min-width: 560px; }
+      .code-trace { min-width: 560px; grid-template-columns: 1.35fr .65fr; }
       .flow-path { justify-content: flex-start; }
       .xss-lab { grid-template-columns: 1fr; }
       .xss-lab > .scene-arrow { transform: rotate(90deg); }
@@ -321,7 +335,8 @@ const html = String.raw`<!doctype html>
         const end = matches[index + 1]?.index ?? source.length;
         const raw = source.slice(start, end).trim();
         const prefix = source.slice(Math.max(0, start - 100), start);
-        const contentId = prefix.match(/<!--\s*content-id:\s*([a-z0-9-]+)\s*-->\s*$/i)?.[1];
+        const contentIdMatch = prefix.match(new RegExp('<' + '!--\\s*content-id:\\s*([a-z0-9-]+)\\s*--' + '>\\s*$', 'i'));
+        const contentId = contentIdMatch ? contentIdMatch[1] : undefined;
         if (!contentId) throw new Error('Missing stable content-id before chapter: ' + match[1]);
         const rendered = CHAPTER_RENDER.find(chapter => chapter.id === contentId);
         if (!rendered) throw new Error('Missing rendered chapter AST for: ' + contentId);
@@ -455,10 +470,353 @@ const html = String.raw`<!doctype html>
         {name:'Pending',detail:'isPending',text:'UI có thể báo đang cập nhật nhưng vẫn nhận thao tác tiếp.'},
         {name:'UI theo kịp',detail:'Results',text:'React có thể làm gián đoạn và thay thế render nền trước commit.'}
       ]},
-      liveReact: { title:'React lab: key, closure và request race', anchor:'React chạy thật — phòng lab cô lập', live:true }
+      asyncOrder: { title:'Event loop: bắt đầu trước không có nghĩa hoàn tất trước', anchor:'b có thể resolve trước a.', steps:[
+        {name:'Call stack',detail:'khởi tạo A',text:'Request A được khởi tạo trước và trả về Promise đang chờ.'},
+        {name:'Call stack',detail:'khởi tạo B',text:'Request B được khởi tạo sau nhưng chạy độc lập với A.'},
+        {name:'B resolve',detail:'microtask B',text:'B hoàn tất trước; continuation của B được đưa vào hàng microtask.'},
+        {name:'A resolve',detail:'microtask A',text:'A hoàn tất muộn hơn. Thứ tự kết quả là B rồi A, không phải thứ tự bắt đầu.'}
+      ]},
+      immutableFlow: { title:'Immutable update: giữ identity cũ, thay đúng nhánh đổi', anchor:'Nếu có thể tính một giá trị từ props/state', steps:[
+        {name:'State cũ',detail:'todos · identity A',text:'State hiện tại là một snapshot có identity riêng.'},
+        {name:'map',detail:'duyệt từng todo',text:'Các item không đổi được tái sử dụng cùng reference.'},
+        {name:'Copy item đổi',detail:'{ ...todo, done }',text:'Chỉ item cần sửa được tạo object mới.'},
+        {name:'State mới',detail:'array identity B',text:'Setter nhận array mới; giá trị suy ra tiếp tục được tính trong render, không lưu state trùng.'}
+      ]},
+      declarativeFlow: { title:'Declarative: state đi qua một hàm mô tả UI', anchor:'Công thức cốt lõi:', steps:[
+        {name:'Tương tác',detail:'click',text:'Người dùng tạo một sự kiện.'},
+        {name:'State',detail:'count: 0 → 1',text:'Handler yêu cầu cập nhật state, không tự sửa từng DOM node.'},
+        {name:'Render',detail:'UI = f(state)',text:'Component mô tả lại text và màu từ cùng một nguồn state.'},
+        {name:'Commit',detail:'DOM đồng bộ',text:'React DOM áp các thay đổi cần thiết để giao diện khớp mô tả mới.'}
+      ]},
+      compositionFlow: { title:'Composition: ghép cây component qua children', anchor:'React ưu tiên Composition hơn Inheritance.', steps:[
+        {name:'App',detail:'chọn UserCard',text:'Component cha đặt UserCard vào cây giao diện.'},
+        {name:'UserCard',detail:'dùng Card',text:'UserCard ghép Card thay vì kế thừa từ Card.'},
+        {name:'children',detail:'Avatar + h3',text:'Nội dung được truyền qua children như một phần của mô tả UI.'},
+        {name:'Cây UI',detail:'Card bao nội dung',text:'Kết quả là cây component có thể thay nội dung mà không cần tạo class con.'}
+      ]},
+      refFlow: { title:'useRef: cùng một hộp qua render, đổi current không render lại', anchor:'Điểm khác biệt cốt lõi so với', steps:[
+        {name:'Render',detail:'ref object được tạo',text:'React trả về một ref object và giữ nguyên identity của nó.'},
+        {name:'Gắn DOM',detail:'ref.current = input',text:'Sau commit, current trỏ đến DOM node thật.'},
+        {name:'Event',detail:'input.focus()',text:'Handler đọc current để gọi API imperative của DOM.'},
+        {name:'Đổi current',detail:'không schedule render',text:'Gán current chỉ đổi chiếc hộp; nếu UI cần phản ánh giá trị, hãy dùng state.'}
+      ]},
+      customHookFlow: { title:'Custom Hook: chia sẻ logic, không chia sẻ state instance', anchor:'Nếu cần thêm debounce', steps:[
+        {name:'Sidebar',detail:'useWindowWidth()',text:'Sidebar gọi hook và nhận một state instance của riêng nó.'},
+        {name:'Header',detail:'useWindowWidth()',text:'Header dùng lại cùng logic nhưng có state/effect instance riêng.'},
+        {name:'Hook',detail:'listener + cleanup',text:'Quy tắc đăng ký resize và cleanup chỉ được viết tại một nơi.'},
+        {name:'Thay đổi logic',detail:'thêm debounce',text:'Sửa implementation của hook giúp mọi nơi gọi dùng cùng quy tắc mới.'}
+      ]},
+      thunkFlow: { title:'createAsyncThunk: một request, ba action vòng đời', anchor:'chuẩn hóa vòng đời', steps:[
+        {name:'pending',detail:'requestId = A',text:'Thunk dispatch pending trước khi chạy payload creator; reducer bật loading và giữ requestId.'},
+        {name:'payload creator',detail:'await fetch',text:'Promise chạy và có thể hoàn tất hoặc throw.'},
+        {name:'fulfilled',detail:'payload = user',text:'Thành công tạo fulfilled; reducer chỉ nhận nếu requestId còn hiện hành.'},
+        {name:'rejected',detail:'error.message',text:'Nếu throw, rejected đi vào nhánh lỗi thay cho fulfilled.'}
+      ]},
+      statePlacement: { title:'Đặt state đúng nơi: một cây quyết định ngắn', anchor:'Trước khi chọn', steps:[
+        {name:'Suy ra được?',detail:'có → tính khi render',text:'Không lưu bản sao nếu giá trị có thể tính từ props/state khác.'},
+        {name:'Chỉ dùng cục bộ?',detail:'có → local state',text:'Đặt state gần component tương tác nhất.'},
+        {name:'Cần URL?',detail:'có → URL state',text:'Đưa phần cần chia sẻ, bookmark hoặc phục hồi vào URL.'},
+        {name:'Từ server?',detail:'key + cache',text:'Mô hình hóa server state bằng key, độ stale, retry và invalidation.'}
+      ]},
+      controlledForm: { title:'Controlled input: DOM → state → validation → UI', anchor:'Input controlled nhận', fields:[{key:'email',label:'Email thử nghiệm',type:'text',value:'a@b.dev'}], build:v=>[
+        {name:'Input event',detail:v.email||'(rỗng)',text:'Trình duyệt phát onChange với giá trị mới.'},
+        {name:'setEmail',detail:'state nhận value',text:'Handler yêu cầu React lưu giá trị input.'},
+        {name:'Derived valid',detail:(v.email||'').includes('@')?'true':'false',text:'Validation được tính từ email trong render, không cần state valid riêng.'},
+        {name:'UI',detail:(v.email||'').includes('@')?'ẩn cảnh báo':'hiện cảnh báo',text:'value và thông báo đều được mô tả từ cùng state email.'}
+      ]},
+      serverCache: { title:'Server state: key, cache, stale và revalidation', anchor:'Checklist cho một resource', steps:[
+        {name:'Resource key',detail:"['user', userId]",text:'Key nhận diện chính xác dữ liệu mà màn hình đang yêu cầu.'},
+        {name:'Cache lookup',detail:'fresh / stale / miss',text:'Cache quyết định có thể dùng dữ liệu sẵn có hay cần fetch.'},
+        {name:'Fetch',detail:'request theo key',text:'Request mới gắn với key; response của key cũ không đại diện màn hình hiện tại.'},
+        {name:'Revalidate',detail:'cache + UI đồng bộ',text:'Kết quả hợp lệ cập nhật cache, rồi subscriber của đúng key nhận dữ liệu.'}
+      ]},
+      suspenseFlow: { title:'Suspense boundary: child suspend, fallback giữ ranh giới', anchor:'không tự kích hoạt Suspense', steps:[
+        {name:'Render child',detail:'đọc resource',text:'React bắt đầu render nội dung bên trong boundary.'},
+        {name:'Suspend',detail:'resource chưa sẵn sàng',text:'Child báo chưa thể hoàn tất render qua cơ chế có hỗ trợ Suspense.'},
+        {name:'Fallback',detail:'Skeleton',text:'Boundary gần nhất hiển thị fallback thay cho vùng nội dung đang chờ.'},
+        {name:'Retry render',detail:'resource sẵn sàng',text:'React thử render lại child và commit nội dung hoàn chỉnh.'}
+      ]},
+      errorBoundaryFlow: { title:'Error Boundary: cô lập lỗi render theo nhánh cây', anchor:'Error Boundary hiển thị fallback', steps:[
+        {name:'Render child',detail:'ProductPanel',text:'Boundary render cây con bình thường.'},
+        {name:'Throw',detail:'lỗi trong render',text:'Một descendant throw khi React đang render.'},
+        {name:'Catch boundary',detail:'error state',text:'Boundary gần nhất chuyển sang trạng thái lỗi; sibling ngoài boundary vẫn tồn tại.'},
+        {name:'Fallback / retry',detail:'tạo lần thử mới',text:'Fallback cho người dùng thao tác retry; ứng dụng phải quyết định cách reset đúng state/resource.'}
+      ]},
+      testingFlow: { title:'Test hành vi: thao tác như người dùng, kiểm tra UI', anchor:'Test nên kiểm tra điều người dùng', steps:[
+        {name:'Render',detail:'<EmailField />',text:'Test dựng component từ public API của nó.'},
+        {name:'Query',detail:'role + accessible name',text:'Tìm control theo cách người dùng và assistive technology nhận biết.'},
+        {name:'Interact',detail:'type email',text:'user-event mô phỏng chuỗi thao tác thay vì gọi thẳng handler nội bộ.'},
+        {name:'Assert',detail:'alert không tồn tại',text:'Kiểm tra kết quả quan sát được, không phụ thuộc state hay tên hàm bên trong.'}
+      ]},
+      accessibilityFlow: { title:'Accessibility: semantic → name → keyboard → feedback', anchor:'Ưu tiên HTML semantic', steps:[
+        {name:'Semantic HTML',detail:'button / label',text:'Chọn element đúng tạo sẵn role và hành vi nền tảng.'},
+        {name:'Accessible name',detail:'label liên kết input',text:'Control có tên để screen reader và query theo role nhận diện.'},
+        {name:'Keyboard + focus',detail:'Tab / Enter',text:'Người dùng bàn phím tiếp cận, thao tác và nhìn thấy focus.'},
+        {name:'Feedback',detail:'text + ARIA phù hợp',text:'Thông báo không chỉ dựa vào màu; kiểm tra tự động được bổ sung bằng thử nghiệm thủ công.'}
+      ]},
+      liveReact: { title:'React lab: key, closure và request race', anchor:'React lab — phòng lab cô lập', live:true }
     };
 
-    const FLOW_BY_CHAPTER = { 0:['snapshot'], 1:['xssLab','repaint'], 2:['oneWay'], 3:['jsx'], 4:['reconciliation','keys','fiber'], 5:['hooks'], 6:['batching','requestReducer','effectCycle','fetchCleanup','staleClosure','memo','callbackMemo'], 7:['contextFlow','redux'], 8:['requestRace'], 9:['transition'], 10:['liveReact'] };
+    const TRACE_DEFS = {
+      snapshot: { code:[
+        'function render(count) {',
+        '  const handleClick = () => setCount(count + 1);',
+        '  return handleClick;',
+        '}',
+        'const handlerA = render(0);',
+        'handlerA();',
+        'const handlerB = render(1);',
+        'handlerA();'
+      ], at:[[0,4],[1,5],[0,6],[7]], results:['handlerA đóng gói count = 0','enqueue state = 1; handlerA vẫn thấy 0','handlerB đóng gói count = 1','handlerA cũ vẫn tính 0 + 1 = 1'] },
+      xssLab: { code:[
+        'const name = request.query.name;',
+        'const html = "<h1>Chào " + name + "</h1>";',
+        'browser.parse(html);',
+        'const safe = escapeHtml(name);',
+        'browser.parse("<h1>Chào " + safe + "</h1>");'
+      ], at:[[0],[1],[2],[3,4]], results:['name là chuỗi chưa tin cậy','response chứa một node script','script chạy trong iframe sandbox','payload hiển thị như text; không có script node'] },
+      repaint: values => { const size=Math.max(1,Number(values.size)||1000); return { code:[
+        'messages.push(newMessage);',
+        'chatBox.innerHTML = renderAll(messages);',
+        'const nextTree = render(messages);',
+        'const changes = diff(previousTree, nextTree);',
+        'commit(changes);'
+      ], at:[[0],[1],[2,3],[4]], results:['messages.length = '+(size+1),'dựng lại '+(size+1)+' DOM node','changes = [{ type: "INSERT", index: '+size+' }]','DOM chèn thêm đúng node #'+(size+1)] }; },
+      oneWay: { code:[
+        'function Child({ count, onIncrease }) {',
+        '  return <button onClick={onIncrease}>{count}</button>;',
+        '}',
+        'const onIncrease = () => setCount(c => c + 1);',
+        '<Child count={count} onIncrease={onIncrease} />;'
+      ], at:[[1],[1,3],[3],[4]], results:['Child phát sinh sự kiện click','onIncrease được gọi','Parent enqueue count + 1','Child nhận count mới qua props'] },
+      jsx: { code:[
+        'const source = <h1 className="title">Hello</h1>;',
+        '// compiler transform',
+        'const element = _jsx("h1", {',
+        '  className: "title", children: "Hello"',
+        '});'
+      ], at:[[0],[1],[2,3,4]], results:['đầu vào: cú pháp JSX','JSX được compiler chuyển đổi','element = { type: "h1", props: { ... } }'] },
+      reconciliation: { code:[
+        'const previousTree = render({ count: 0 });',
+        'commit(mount(previousTree));',
+        'const nextTree = render({ count: 1 });',
+        'const changes = reconcile(previousTree, nextTree);',
+        'commit(changes);'
+      ], at:[[0,1],[2],[3],[4]], results:['DOM: h1, p(count=0), button','tạo mô tả p(count=1); DOM chưa đổi','changes = [UPDATE_TEXT p]','DOM: chỉ text trong p đổi thành 1'] },
+      keys: values => { const items=(values.items||'A, B, C').split(',').map(x=>x.trim()).filter(Boolean); const first=items[0]||'A'; const after=items.slice(1); return { code:[
+        'const before = ['+items.map(x=>'"'+x+'"').join(', ')+'];',
+        'render(before, (item, index) => index);',
+        'const after = before.slice(1);',
+        'render(after, (item, index) => index);',
+        'render(after, item => item.id);'
+      ], at:[[0,1],[2,3],[4]], results:['key theo vị trí: '+items.map((x,i)=>i+'→'+x).join(', '),'key cũ đổi chủ: '+after.map((x,i)=>i+'→'+x).join(', ')+'; '+first+' bị xóa','key theo id: '+after.map(x=>x+'→'+x).join(', ')+'; state bám đúng item'] }; },
+      fiber: { code:[
+        'while (nextUnit) { performUnit(nextUnit); }',
+        '// main thread chưa thể nhận click',
+        'while (nextUnit && !shouldYield()) {',
+        '  nextUnit = performUnit(nextUnit);',
+        '}',
+        'schedule(highPriorityClick);'
+      ], at:[[0],[1],[2,3,4],[5]], results:['A → B → C → D chạy liền một khối','click phải chờ công việc đồng bộ hoàn tất','Fiber dừng tại ranh giới unit of work','click được ưu tiên; render nền có thể tiếp tục/làm lại'] },
+      hooks: { code:[
+        'componentDidMount() { subscribe(id); }',
+        'componentWillUnmount() { unsubscribe(id); }',
+        'useEffect(() => {',
+        '  subscribe(id);',
+        '  return () => unsubscribe(id);',
+        '}, [id]);'
+      ], at:[[0],[2,3],[1],[4,5]], results:['class đăng ký khi mount','effect đăng ký sau commit','class cleanup nằm ở method khác','hook đặt subscribe và unsubscribe cạnh nhau'] },
+      redux: values => ({ code:[
+        'dispatch('+String(values.action||'addItem(product)')+');',
+        'const nextState = cartReducer(state, action);',
+        'store.setState(nextState);',
+        'const items = useSelector(s => s.cart.items);',
+        'return <Cart items={items} />;'
+      ], at:[[0],[1],[2],[3],[4]], results:['action được gửi tới store','reducer tính state kế tiếp','subscriber được thông báo','component đọc items mới','UI render từ state mới'] }),
+      batching: { code:[
+        'let count = 0;',
+        'setCount(count + 1); // enqueue 1',
+        'setCount(count + 1); // enqueue 1',
+        'setCount(count + 1); // enqueue 1',
+        'setCount(prev => prev + 1); // 0 → 1',
+        'setCount(prev => prev + 1); // 1 → 2',
+        'setCount(prev => prev + 1); // 2 → 3',
+        'commit();'
+      ], at:[[0],[1,2,3],[4,5,6],[7]], results:['snapshot count = 0','queue thay thế: [1, 1, 1]','queue hàm: 0 → 1 → 2 → 3','kết quả trực tiếp = 1; functional = 3'] },
+      requestReducer: values => { const action=values.requestAction||'FETCH_SUCCESS'; const failed=action==='FETCH_ERROR'; return { code:[
+        'dispatch({ type: "FETCH_START" });',
+        'state = reducer(state, startAction);',
+        'const result = await fetchUser();',
+        'dispatch({ type: "'+action+'", payload: result });',
+        'state = reducer(state, resultAction);',
+        'return state.isLoading ? <Spinner /> : <Profile />;'
+      ], at:[[0],[1],[2,3],[4],[5]], results:['action = FETCH_START','{ data:null, isLoading:true, error:null }',action+' được dispatch',failed?'{ data:null, isLoading:false, error:err }':'{ data:user, isLoading:false, error:null }',failed?'UI hiển thị error.message':'UI hiển thị state.data.name'] }; },
+      effectCycle: { code:[
+        'function Component({ roomId }) {',
+        '  useEffect(() => {',
+        '    const connection = connect(roomId);',
+        '    return () => connection.disconnect();',
+        '  }, [roomId]);',
+        '}'
+      ], at:[[0],[1,2],[0,4],[3],[1,2]], results:['render với roomId hiện tại','effect kết nối sau commit','roomId đổi; tạo render kế tiếp','ngắt connection của roomId cũ','kết nối bằng roomId mới'] },
+      fetchCleanup: values => { const userId=String(values.userId||'2'); return { code:[
+        'useEffect(() => {',
+        '  let cancelled = false;',
+        '  fetch("/users/" + userId)',
+        '    .then(data => { if (!cancelled) setUser(data); });',
+        '  return () => { cancelled = true; };',
+        '}, [userId]);'
+      ], at:[[0,2],[5],[4],[0,2],[3]], results:['request /users/1 đang chờ','userId: 1 → '+userId,'closure cũ: cancelled = true','request /users/'+userId+' bắt đầu','chỉ response có cancelled = false được setUser'] }; },
+      staleClosure: { code:[
+        'useEffect(() => {',
+        '  const id = setInterval(() => {',
+        '    setCount(count + 1);',
+        '  }, 1000);',
+        '  return () => clearInterval(id);',
+        '}, []);'
+      ], at:[[0,5],[1,2],[2],[2]], results:['effect mount chụp count = 0','interval callback giữ count = 0','enqueue 0 + 1; UI thành 1','vẫn enqueue 1; Object.is(1, 1) nên UI đứng yên'] },
+      memo: values => { const changed=values.memoCase==='keyword đổi'; return { code:[
+        'const filtered = useMemo(() => {',
+        '  return products.filter(matchesKeyword);',
+        '}, [products, keyword]);',
+        'return filtered.map(renderProduct);'
+      ], at:[[0],[2],[changed?1:0],[3]], results:['ProductList được gọi lại','so sánh products và keyword bằng Object.is',changed?'keyword đổi → chạy filter lại':'deps giữ nguyên → trả cached filtered','render danh sách từ filtered'] }; },
+      callbackMemo: { code:[
+        'const handleClick = useCallback(() => {',
+        '  submitOrder(productId);',
+        '}, [productId]);',
+        'return <ExpensiveChild onClick={handleClick} />;'
+      ], at:[[0],[0,2],[3],[3]], results:['Parent render vì count đổi','productId giữ nguyên → cùng function reference','React.memo thấy onClick không đổi','bỏ qua render do Parent; update riêng của Child vẫn chạy'] },
+      contextFlow: { code:[
+        '<UserContext.Provider value={user}>',
+        '  <Layout><Section><ProfileCard /></Section></Layout>',
+        '</UserContext.Provider>',
+        'function ProfileCard() {',
+        '  const user = useContext(UserContext);',
+        '  return <Avatar user={user} />;',
+        '}'
+      ], at:[[0],[1],[1],[3,4,5]], results:['Provider công bố value = user','Layout không cần nhận user prop','Section không phải truyền hộ user','ProfileCard đọc Provider gần nhất và render Avatar'] },
+      requestRace: { code:[
+        'const tokenA = ++latest; fetchUser(1);',
+        'const tokenB = ++latest; fetchUser(2);',
+        'if (tokenB === latest) setUser(userB);',
+        'if (tokenA === latest) setUser(userA);'
+      ], at:[[0],[1],[2],[3]], results:['tokenA = 1; A đang chờ','tokenB = latest = 2','2 === 2 → UI hiện user B','1 !== 2 → bỏ qua response A về muộn'] },
+      transition: { code:[
+        'setQuery(nextQuery);',
+        'startTransition(() => {',
+        '  setFilter(nextQuery);',
+        '});',
+        'if (isPending) showProgress();',
+        'return <Results filter={filter} />;'
+      ], at:[[0],[1,2,3],[4],[5]], results:['input controlled phản hồi ngay','enqueue update filter ở transition lane','isPending = true; input vẫn tương tác','commit Results của query mới nhất'] },
+      asyncOrder: { code:[
+        'const promiseA = fetchUser(1);',
+        'const promiseB = fetchUser(2);',
+        'promiseA.then(user => commit("A", user));',
+        'promiseB.then(user => commit("B", user));'
+      ], at:[[0],[1],[3],[2]], results:['A bắt đầu; Promise A pending','B bắt đầu; Promise B pending','B resolve trước → chạy continuation B','A resolve sau → chạy continuation A'] },
+      immutableFlow: { code:[
+        'const nextTodos = previous.map(todo =>',
+        '  todo.id === id',
+        '    ? { ...todo, done: !todo.done }',
+        '    : todo',
+        ');',
+        'setTodos(nextTodos);',
+        'const doneCount = nextTodos.filter(t => t.done).length;'
+      ], at:[[0],[1,3],[2],[4,5,6]], results:['đọc snapshot previous','item không khớp giữ nguyên reference','item khớp nhận object/reference mới','array mới được lưu; doneCount được suy ra'] },
+      declarativeFlow: { code:[
+        'function handleClick() {',
+        '  setCount(count + 1);',
+        '}',
+        'return <p style={{ color: count % 2 ? "blue" : "red" }}>',
+        '  {count}',
+        '</p>;'
+      ], at:[[0],[1],[3,4,5],[3,4]], results:['click gọi handler','enqueue count = 1','render mô tả text 1 và màu blue','DOM được đồng bộ với mô tả mới'] },
+      compositionFlow: { code:[
+        'function Card({ children }) {',
+        '  return <div className="card">{children}</div>;',
+        '}',
+        'function UserCard({ user }) {',
+        '  return <Card><Avatar user={user} /><h3>{user.name}</h3></Card>;',
+        '}'
+      ], at:[[3],[4],[0,1],[1,4]], results:['App chọn render UserCard','UserCard trả về Card với nội dung con','Card nhận children mà không biết chi tiết nội dung','cây kết quả: div.card → Avatar + h3'] },
+      refFlow: { code:[
+        'const inputRef = useRef(null);',
+        '<input ref={inputRef} />;',
+        'function focusInput() {',
+        '  inputRef.current.focus();',
+        '}',
+        'inputRef.current = anotherNode;'
+      ], at:[[0],[1],[2,3],[5]], results:['ref = { current: null }; identity được giữ','sau commit: current = HTMLInputElement','DOM input nhận focus; không cần render mới','current đổi nhưng React không schedule render'] },
+      customHookFlow: { code:[
+        'function useWindowWidth() {',
+        '  const [width, setWidth] = useState(window.innerWidth);',
+        '  useEffect(() => subscribeResize(setWidth), []);',
+        '  return width;',
+        '}',
+        'const sidebarWidth = useWindowWidth();',
+        'const headerWidth = useWindowWidth();'
+      ], at:[[5],[6],[0,1,2,3],[2]], results:['Sidebar có state/effect instance #1','Header có state/effect instance #2','logic subscribe/cleanup nằm trong một hook','thêm debounce tại hook → cả hai caller dùng quy tắc mới'] },
+      thunkFlow: { code:[
+        'dispatch(fetchUser(id));',
+        '// tự động: fetchUser.pending(requestId)',
+        'const user = await fetch("/users/" + id);',
+        '// thành công: fetchUser.fulfilled(user, requestId)',
+        '// thất bại: fetchUser.rejected(error, requestId)'
+      ], at:[[0,1],[2],[3],[4]], results:['loading = true; currentRequestId được lưu','payload creator đang chờ fetch','đúng requestId → user được cập nhật','đúng requestId → error được cập nhật'] },
+      statePlacement: { code:[
+        'if (canDerive(value)) return calculateDuringRender();',
+        'if (isLocal(value)) return useStateNearOwner();',
+        'if (mustBeShareable(value)) return putInURL();',
+        'if (comesFromServer(value)) return cacheByResourceKey();'
+      ], at:[[0],[1],[2],[3]], results:['derived value: không tạo state thứ hai','local UI: đặt gần nơi tương tác','bookmark/back/forward: URL là nguồn phù hợp','server data: key + stale + cache + invalidation'] },
+      controlledForm: values => { const email=String(values.email||''); const valid=email.includes('@'); return { code:[
+        'const [email, setEmail] = useState("");',
+        'const onChange = event => setEmail(event.target.value);',
+        'const valid = email.includes("@");',
+        '<input value={email} onChange={onChange} />',
+        '{!valid && email && <span role="alert">Email chưa hợp lệ</span>}'
+      ], at:[[1],[0,1],[2],[3,4]], results:['event.target.value = "'+email+'"','email state = "'+email+'"','valid = '+valid,valid?'input hiển thị email; alert bị ẩn':'input hiển thị email; alert xuất hiện'] }; },
+      serverCache: { code:[
+        'const key = ["user", userId];',
+        'const cached = cache.get(key);',
+        'if (!cached || cached.stale) fetchByKey(key);',
+        'cache.set(key, response);',
+        'notifySubscribers(key);'
+      ], at:[[0],[1],[2],[3,4]], results:['key nhận diện user hiện tại','cache trả fresh, stale hoặc miss','stale/miss → request gắn với đúng key','cache cập nhật; UI của đúng key nhận response'] },
+      suspenseFlow: { code:[
+        '<Suspense fallback={<Skeleton />}>',
+        '  <ProductList />',
+        '</Suspense>',
+        'const products = readProducts();',
+        '// resource pending → suspend',
+        '// resource ready → retry render'
+      ], at:[[1,3],[4],[0,2],[5,1,3]], results:['ProductList bắt đầu đọc resource','render chưa thể hoàn tất','boundary gần nhất hiển thị Skeleton','ProductList render lại và thay fallback bằng nội dung'] },
+      errorBoundaryFlow: { code:[
+        '<ErrorBoundary fallback={<Retry />}>',
+        '  <ProductPanel />',
+        '</ErrorBoundary>',
+        'throw new Error("Không đọc được sản phẩm");',
+        'static getDerivedStateFromError(error) { return { error }; }',
+        'if (error) return <Retry />;'
+      ], at:[[0,1,2],[3],[4],[5]], results:['ProductPanel nằm trong phạm vi boundary','descendant lỗi trong render','boundary gần nhất lưu trạng thái lỗi','chỉ vùng này chuyển sang Retry fallback'] },
+      testingFlow: { code:[
+        'render(<EmailField />);',
+        'const input = screen.getByRole("textbox", { name: /email/i });',
+        'await user.type(input, "a@b.dev");',
+        'expect(screen.queryByRole("alert")).not.toBeInTheDocument();'
+      ], at:[[0],[1],[2],[3]], results:['EmailField xuất hiện trong DOM test','tìm thấy input qua role + accessible name','người dùng nhập email hợp lệ','PASS: UI không còn cảnh báo'] },
+      accessibilityFlow: { code:[
+        '<label htmlFor="email">Email</label>',
+        '<input id="email" aria-describedby="email-help" />',
+        '<p id="email-help">Dùng địa chỉ công việc</p>',
+        '<button type="submit">Lưu</button>',
+        '<p role="status">Đã lưu</p>'
+      ], at:[[0,1,3],[0,1],[3],[2,4]], results:['input và button có semantic mặc định','textbox có accessible name “Email”','Tab tới button; Enter kích hoạt submit','hướng dẫn và trạng thái có text, không chỉ có màu'] }
+    };
+
+    const FLOW_BY_CHAPTER = { 0:['snapshot','asyncOrder','immutableFlow'], 1:['xssLab','repaint'], 2:['declarativeFlow','compositionFlow','oneWay'], 3:['jsx'], 4:['reconciliation','keys','fiber'], 5:['hooks'], 6:['batching','requestReducer','effectCycle','fetchCleanup','staleClosure','refFlow','memo','callbackMemo','customHookFlow'], 7:['contextFlow','redux','thunkFlow'], 8:['statePlacement','controlledForm','serverCache','requestRace'], 9:['transition','suspenseFlow','errorBoundaryFlow'], 10:['testingFlow','accessibilityFlow','liveReact'] };
     const chapters = splitSource(SOURCE);
     const readStorage = (key, fallback) => {
       try { const value = localStorage.getItem(key); return value === null ? fallback : JSON.parse(value); }
@@ -469,13 +827,27 @@ const html = String.raw`<!doctype html>
     const knownContentIds = new Set(chapters.map(chapter => chapter.id));
     let completed = new Set(readStorage('react-explorer-completed-v3', []).filter(id => typeof id === 'string' && knownContentIds.has(id)));
 
+    function traceHtml(id, step, values) {
+      const source=TRACE_DEFS[id];
+      if (!source) return '';
+      const trace=typeof source==='function' ? source(values) : source;
+      const active=new Set(trace.at[step]||[]);
+      const done=new Set(trace.at.slice(0,step).flat());
+      const lines=trace.code.map((line,index)=>{
+        const state=active.has(index)?'current':done.has(index)?'done':'';
+        return '<div class="trace-line '+state+'"><span class="trace-line-number">'+(index+1)+'</span><code>'+escapeHtml(line)+'</code></div>';
+      }).join('');
+      const lineLabel=[...active].map(index=>index+1).join(', ');
+      return '<div class="code-trace"><div><div class="trace-head">Code trace · dòng đang chạy</div><div class="trace-code">'+lines+'</div></div><div class="trace-result"><div class="trace-head">Ánh xạ kết quả</div><div class="trace-result-body"><span class="trace-result-label">Sau dòng '+escapeHtml(lineLabel)+'</span><output class="trace-result-value" aria-live="polite">'+escapeHtml(trace.results[step]||'')+'</output></div></div></div>';
+    }
+
     function flowHtml(id, def) {
       if (def.live) return '<section class="flow" data-flow="'+id+'"><div class="flow-top"><div><div class="flow-label">React lab · iframe sandbox</div><h4>'+escapeHtml(def.title)+'</h4><p class="flow-note">Chọn từng bài theo thứ tự. Mỗi bài chỉ kiểm chứng một ý và tự nêu kết luận sau thao tác. Cần mạng để tải React 19.2 từ CDN.</p></div></div><iframe class="react-lab-frame" sandbox="allow-scripts" title="Phòng lab React lab" srcdoc="'+escapeHtml(reactLabDocument())+'"></iframe></section>';
       const fields=(def.fields||[]).map(field=>{
         const control=field.type==='select' ? '<select data-field="'+field.key+'">'+field.options.map(x=>'<option>'+escapeHtml(x)+'</option>').join('')+'</select>' : '<input data-field="'+field.key+'" type="'+field.type+'" value="'+escapeHtml(field.value)+'" min="1">';
         return '<label class="field">'+escapeHtml(field.label)+control+'</label>';
       }).join('');
-      return '<section class="flow" data-flow="'+id+'"><div class="flow-top"><div><div class="flow-label">Mô hình giải thích tương tác</div><h4>'+escapeHtml(def.title)+'</h4><p class="flow-note">Minh họa cơ chế, không phải phép đo hiệu năng hoặc bản thực thi React nội bộ.</p></div><span class="flow-counter" aria-live="polite">1 / 1</span></div>'+(fields?'<div class="flow-inputs">'+fields+'</div>':'')+'<div class="flow-stage"><div class="flow-scene"></div><div class="flow-path"></div><div class="flow-explain" aria-live="polite"></div></div><div class="flow-controls"><div class="step-dots"></div><button class="run-btn" type="button">Chạy →</button></div></section>';
+      return '<section class="flow" data-flow="'+id+'"><div class="flow-top"><div><div class="flow-label">Mô hình giải thích tương tác</div><h4>'+escapeHtml(def.title)+'</h4><p class="flow-note">Bấm từng bước để theo dõi dòng code, state/kết quả và sơ đồ tương ứng. Trace diễn giải cơ chế; không phải mã nguồn React nội bộ hay benchmark.</p></div><span class="flow-counter" aria-live="polite">1 / 1</span></div>'+(fields?'<div class="flow-inputs">'+fields+'</div>':'')+'<div class="flow-stage"><div class="flow-scene"></div><div class="flow-trace"></div><div class="flow-path"></div><div class="flow-explain" aria-live="polite"></div></div><div class="flow-controls"><div class="step-dots"></div><button class="run-btn" type="button">Chạy →</button></div></section>';
     }
 
     function reactLabDocument() {
@@ -571,7 +943,21 @@ const html = String.raw`<!doctype html>
         memo:[['Render','ProductList'],['Deps','products + keyword'],[values.memoCase==='keyword đổi'?'Miss':'Hit',values.memoCase==='keyword đổi'?'filter lại':'dùng cache'],['UI','filtered.map']],
         callbackMemo:[['Parent','count đổi'],['useCallback','cùng reference'],['React.memo','props không đổi'],['Child','skip render']],
         requestRace:[['Request A','user 1'],['Request B','user 2'],['B resolve','commit user 2'],['A resolve','ignored']],
-        transition:[['Input','query mới'],['Transition','filter mới'],['Pending','UI vẫn tương tác'],['Results','theo kịp']]
+        transition:[['Input','query mới'],['Transition','filter mới'],['Pending','UI vẫn tương tác'],['Results','theo kịp']],
+        asyncOrder:[['Start A','Promise pending'],['Start B','Promise pending'],['Resolve B','microtask B'],['Resolve A','microtask A']],
+        immutableFlow:[['Previous','array A'],['Reuse','item không đổi'],['Copy','item đổi'],['Next','array B + derived']],
+        declarativeFlow:[['Event','click'],['State','count → 1'],['Render','UI = f(state)'],['Commit','DOM khớp UI']],
+        compositionFlow:[['App','UserCard'],['UserCard','Card'],['children','Avatar + h3'],['UI tree','div.card']],
+        refFlow:[['Render','ref object'],['Commit','current = input'],['Event','focus()'],['Mutation','không render']],
+        customHookFlow:[['Sidebar','hook instance 1'],['Header','hook instance 2'],['useWindowWidth','logic dùng chung'],['Edit once','debounce']],
+        thunkFlow:[['pending','requestId'],['payload','await fetch'],['fulfilled','user'],['rejected','error']],
+        statePlacement:[['Derived','tính khi render'],['Local','useState gần owner'],['Shareable','URL'],['Server','key + cache']],
+        controlledForm:[['onChange',values.email||'(rỗng)'],['state','email mới'],['valid',(values.email||'').includes('@')?'true':'false'],['UI',(values.email||'').includes('@')?'hợp lệ':'cảnh báo']],
+        serverCache:[['Key','user + id'],['Cache','fresh/stale/miss'],['Fetch','theo key'],['Notify','đúng subscriber']],
+        suspenseFlow:[['Child','read resource'],['Suspend','pending'],['Boundary','fallback'],['Retry','content']],
+        errorBoundaryFlow:[['Boundary','ProductPanel'],['Throw','render error'],['Catch','error state'],['Fallback','Retry']],
+        testingFlow:[['Render','public UI'],['Query','role + name'],['Interact','user.type'],['Assert','visible result']],
+        accessibilityFlow:[['Semantic','label/button'],['Name','Email'],['Keyboard','Tab + Enter'],['Feedback','text + status']]
       }[id]||[];
       return '<div class="scene-pipeline">'+generic.map((item,index)=>dataCard(item[0],item[0],item[1],index===step)+(index<generic.length-1?'<div class="scene-arrow '+(index<step?'hot':'')+'">→</div>':'')).join('')+'</div>';
     }
@@ -585,6 +971,7 @@ const html = String.raw`<!doctype html>
           const list=steps(); step=Math.min(step,list.length-1);
           root.querySelector('.flow-counter').textContent=(step+1)+' / '+list.length;
           root.querySelector('.flow-scene').innerHTML=sceneHtml(root.dataset.flow,step,values());
+          root.querySelector('.flow-trace').innerHTML=traceHtml(root.dataset.flow,step,values());
           root.querySelector('.flow-path').innerHTML=list.map((item,i)=>'<div class="flow-node '+(i<=step?'active ':'')+(i===step?'current':'')+'"><div class="node-title">'+escapeHtml(item.name)+'</div><div class="node-detail">'+escapeHtml(item.detail)+'</div></div>').join('');
           root.querySelector('.flow-explain').textContent=list[step].text;
           root.querySelector('.step-dots').innerHTML=list.map((_,i)=>'<button type="button" class="step-dot '+(i===step?'active':'')+'" data-step="'+i+'" aria-label="Bước '+(i+1)+'"></button>').join('');
@@ -618,7 +1005,8 @@ const html = String.raw`<!doctype html>
     }
     function searchText(raw) {
       const fence = String.fromCharCode(96);
-      return raw.replace(/<!--[^]*?-->/g,'').replace(new RegExp(fence+'{3}[^\\n]*','g'),'').replace(/[_*>#|\[\]()]/g,' ').replace(/\s+/g,' ').trim();
+      const htmlComment = new RegExp('<' + '!--[^]*?--' + '>', 'g');
+      return raw.replace(htmlComment,'').replace(new RegExp(fence+'{3}[^\\n]*','g'),'').replace(/[_*>#|\[\]()]/g,' ').replace(/\s+/g,' ').trim();
     }
     const searchIndex=chapters.flatMap(chapter=>{
       const text=searchText(chapter.raw);
